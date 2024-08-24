@@ -14,6 +14,12 @@
 
 # OptiTrack NatNet direct depacketization library for Python 3.x
 
+
+# TODO:
+# - Pass in trial-by-trial details
+# - Have client write csv files
+# - Callbacks are only to return data needed for online operations
+
 import socket
 import struct
 import time
@@ -94,7 +100,6 @@ class NatNetClient:
 
         # Callbacks supplied by calling script
         self.data_callbacks = {
-            'prefix': None,
             'markers': None,
             'rigid_bodies': None,
             'labeled_markers': None,
