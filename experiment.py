@@ -9,7 +9,6 @@ import os
 # local imports
 from get_key_state import get_key_state
 from NatNetClient import NatNetClient
-from Parser import Parser
 
 import klibs
 from klibs import P
@@ -61,77 +60,131 @@ KBYG = 'KBYG'
 class GripApertureRedux(klibs.Experiment):
     def setup(self):
         self.client = NatNetClient()
-        # positional anchors
-        self.places = {
-            LEFT: (P.screen_c[0] - POS_OFFSET, P.screen_c[1]),
-            RIGHT: (P.screen_c[0] + POS_OFFSET, P.screen_c[1]),
+
+        # placeholder locs
+        self.locs = {  # 12cm between placeholder centers
+            LEFT: (P.screen_c[0] - OFFSET, P.screen_c[1]),
+            RIGHT: (P.screen_c[0] + OFFSET, P.screen_c[1]),
         }
 
-        # NOTE:
-        # Annuli serve as placement locations for physical dowels
-        # Target dowel is signaled by applying a white fill to its annulus
-        self.targets = {
-            SMALL: kld.Annulus(DIAM_SMALL, BRIMWIDTH),
-            LARGE: kld.Annulus(DIAM_LARGE, BRIMWIDTH),
-        }
-
-        self.nontargets = {
-            SMALL: kld.Annulus(DIAM_SMALL, BRIMWIDTH),
-            LARGE: kld.Annulus(DIAM_LARGE, BRIMWIDTH),
+        # spawn default placeholders
+        self.placeholders = {
+            TARGET: {
+                SMALL: kld.Annulus(SMALL_DIAM, BRIMWIDTH),
+                LARGE: kld.Annulus(LARGE_DIAM, BRIMWIDTH),
+            },
+            DISTRACTOR: {
+                SMALL: kld.Annulus(SMALL_DIAM, BRIMWIDTH),
+                LARGE: kld.Annulus(LARGE_DIAM, BRIMWIDTH),
+            },
         }
 
         self.go_signal = Tone(
             TONE_DURATION, TONE_SHAPE, TONE_FREQ, TONE_VOLUME
         )
 
-        if not os.path.exists('mocap_data'):
-            os.mkdir('mocap_data')
+        # TODO: Work out optitrack integration
 
-        os.mkdir(f'mocap_data/{P.participant_id}')
-        os.mkdir(f'mocap_data/{P.participant_id}/practice')
-        os.mkdir(f'mocap_data/{P.participant_id}/testing')
+        # randomize task sequence
+        self.task_sequence = [GBYK, KBYG]
+
+        # Stitch in practice block per task if enabled
+        if P.run_practice_blocks:
+            self.task_sequence = [
+                task for task in self.task_sequence for _ in range(2)
+            ]
+            self.insert_practice_block(
+                block_nums=[1, 3], trial_counts=P.trials_per_practice_block
+            )
 
     def block(self):
         if P.practicing:
-            os.mkdir(
-                f'mocap_data/{P.participant_id}/practice/block_{P.block_number}'
-            )
+            self.mocap_data_dir = f'os.getcwd()/mocap_data/{P.participant_id}/practice/block_{P.block_number}'
 
         else:
-            os.mkdir(
-                f'mocap_data/{P.participant_id}/testing/block_{P.block_number}'
-            )
+            self.mocap_data_dir = f'os.getcwd()/mocap_data/{P.participant_id}/testing/block_{P.block_number}'
+
+        self.client.mocap_data_dir = self.mocap_data_dir
+
+        # grab task
+        self.block_task = self.task_sequence.pop(0)
+
+        # instrux
+        instrux = (
+            f'Task: {self.block_task}\n'
+            + f'Block: {P.block_number} of {P.blocks_per_experiment}\n'
+            + '(Instrux TBD, grab stuff)'
+            + '\n\nAny key to start block.'
+        )
 
         fill()
-        message(
-            'Press any key to begin the block.',
-            location=P.screen_c,
-            blit_txt=True,
-        )
+        message(instrux, location=P.screen_c)
         flip()
 
         any_key()
 
     def trial_prep(self):
-        fill()
-        message(
-            'Press any key to begin the trial.',
-            location=P.screen_c,
-            blit_txt=True,
-        )
+        # shut goggles
+        self.board.write(b'56')
+        # extract trial setup
+        self.target, self.distractor = self.arrangement.split('_')
 
-        flip()
+        self.target_loc, _ = self.target.split('-')
+        self.distractor_loc, _ = self.distractor.split('-')
 
-        any_key()
+        # induce slight uncertainty in the reveal time
+        self.evm.add_event(label='go_signal', onset=GO_SIGNAL_ONSET)
+        self.evm.add_event(label='response_timeout', onset=RESPONSE_TIMEOUT)
 
-        self.client.run()
+        # TODO: close plato
+
+        # setup phase
+        self.present_arrangment(phase='setup')
+
+        while True:
+            q = pump(True)
+            if key_pressed(key='space', queue=q):
+                break
 
     def trial(self):
+        self.nnc.startup()
 
-        return {'block_num': P.block_number, 'trial_num': P.trial_number}
+        self.present_arrangment()
+
+        go_signal_delay = CountDown(0.3)
+
+        while go_signal_delay.counting():
+            ui_request()
+
+        # open goggles
+        self.board.write(b'55')
+        hide_mouse_cursor()
+
+        reaction_timer = Stopwatch(start=True)
+        self.go_signal.play()
+
+        rt = 'NA'
+        while self.evm.before('response_timeout'):
+            if get_key_state('space') == 0 and rt == 'NA':
+                rt = reaction_timer.elapsed() / 1000
+
+        # Stop polling opt data
+        self.nnc.shutdown()
+
+        return {
+            'block_num': P.block_number,
+            'trial_num': P.trial_number,
+            'practicing': P.practicing,
+            'left_right_hand': self.hand_used,
+            'palm_back_hand': self.hand_side,
+            'target_loc': self.target_loc,
+            'distractor_loc': self.distractor_loc,
+            'response_time': rt,
+        }
 
     def trial_clean_up(self):
-        pass
+        self.client.data_dir = None
+        self.client.trial_factors = None
 
     def clean_up(self):
         pass
@@ -149,69 +202,60 @@ class GripApertureRedux(klibs.Experiment):
             'distractor_loc': self.distractor_loc,
         }
 
-    # TODO:
-    # this will only result in blocking
-    # see note in NatNetClient.py
+    def rigid_bodies_listener(self, rigid_body):
+        rigid_body.update(self.trial_property_table())
 
-    def natnet_marker_callback(self, markers):
-        trial_props = self.trial_property_table()
-
-        # markers is a container, so need to coerce keys to list
-        fields = list(markers[0].keys())
-        # include trial descriptors
-        fields.append(trial_props.keys())
-
-        fname = f'mocap_data/{P.participant_id}/'
-        fname += 'practice/' if P.practicing else 'testing/'
-        fname += f'block_{trial_props.block_num}/'
-        fname += f'{markers[0].label}'
+        fname = (
+            f'{self.block_dir}/P{P.p_id}_T{P.trial_number}_rigidbody_data.csv'
+        )
 
         if not os.path.exists(fname):
-            os.mkdir(fname)
-
-        fname += f'/trial_{trial_props.trial_num}.csv'
-
-        if not os.path.exists(fname):
-            with open(fname, 'a') as file:
-                writer = DictWriter(file, fieldnames=fields)
+            with open(fname, 'a', newline='') as csvfile:
+                writer = csv.DictWriter(csvfile, fieldnames=rigid_body.keys())
                 writer.writeheader()
 
-        with open(fname, 'a') as file:
-            writer = DictWriter(file, fieldnames=fields)
-            for marker in markers:
-                marker.update(trial_props)
+        with open(fname, 'a', newline='') as csvfile:
+            writer = csv.DictWriter(csvfile, fieldnames=rigid_body.keys())
+            writer.writerow(rigid_body)
+
+    def marker_set_listener(self, marker_set):
+        trial_details = self.trial_property_table()
+
+        fname = f"{self.block_dir}/P{P.p_id}_T{P.trial_number}_{marker_set['label']}_markerset_data.csv"
+
+        if not os.path.exists(fname):
+            sample_marker = marker_set['markers'][0].items()
+            sample_marker.update(trial_details)
+
+            with open(fname, 'a', newline='') as csvfile:
+                writer = csv.DictWriter(
+                    csvfile, fieldnames=sample_marker.keys()
+                )
+                writer.writeheader()
+
+        with open(fname, 'a', newline='') as csvfile:
+            for marker in marker_set['markers']:
+                marker.update(trial_details)
+                writer = csv.DictWriter(csvfile, fieldnames=marker.keys())
                 writer.writerow(marker)
 
-        # if markers[0].label == 'hand':
-        #     self.x_curr = sum([m.x_pos for m in markers]) / len(markers)
-        #     self.y_curr = sum([m.y_pos for m in markers]) / len(markers)
-        #     self.z_curr = sum([m.z_pos for m in markers]) / len(markers)
-
-    def natnet_rigidbody_callback(self, rigidbodies):
-        trial_props = self.trial_property_table()
-
-        # markers is a container, so need to coerce keys to list
-        fields = list(rigidbodies[0].keys())
-        # include trial descriptors
-        fields.append(trial_props.keys())
-
-        fname = f'mocap_data/{P.participant_id}/'
-        fname += 'practice/' if P.practicing else 'testing/'
-        fname += f'block_{trial_props.block_num}/'
-        fname += 'rigidbodies'
+    def get_hand_position(self):
+        trial_details = self.trial_property_table()
+        fname = f"{self.block_dir}/P{P.p_id}_T{P.trial_number}_{marker_set['hand']}_markerset_data.csv"
 
         if not os.path.exists(fname):
-            os.mkdir(fname)
+            return None
 
-        fname += f'/trial_{trial_props.trial_num}.csv'
+        with open(fname, newline='') as csvfile:
+            reader = csv.DictReader(fname)
+            rows = list(reader)
 
-        if not os.path.exists(fname):
-            with open(fname, 'a') as file:
-                writer = DictWriter(file, fieldnames=fields)
-                writer.writeheader()
+            if len(rows) >= 5:
+                # NOTE: 5 markers used to track hand; avg over set to get hand pos
+                x_pos = sum([row['pos_x'] for row in rows[-5:]]) / 5
+                y_pos = sum([row['pos_y'] for row in rows[-5:]]) / 5
+                z_pos = sum([row['pos_z'] for row in rows[-5:]]) / 5
 
-        with open(fname, 'a') as file:
-            writer = DictWriter(file, fieldnames=fields)
-            for rigidbody in rigidbodies:
-                rigidbody.update(trial_props)
-                writer.writerow(rigidbody)
+                return x_pos, y_pos, z_pos
+            else:
+                return None
