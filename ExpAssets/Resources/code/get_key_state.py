@@ -10,7 +10,7 @@ def get_key_state(key):
     pressed or released. Although keypress handling in SDL is usually done by
     checking for keydown and keyup events in the event queue, there are cases
     where it's imporant to check what the state of a key is *right now* instead
-    of waiting for an event. 
+    of waiting for an event.
 
     Args:
         key (int or str): The name (or SDL scancode) of the key to check.
@@ -21,7 +21,7 @@ def get_key_state(key):
     """
     # If key given as string, get the corresponding scancode
     if isinstance(key, str):
-        scancode = sdl2.SDL_GetScancodeFromName(key.encode("utf-8"))
+        scancode = sdl2.SDL_GetScancodeFromName(key.encode('utf-8'))
         if scancode == sdl2.SDL_SCANCODE_UNKNOWN:
             e = "'{0}' is not a valid name for an SDL scancode."
             raise ValueError(e.format(key))
@@ -34,3 +34,4 @@ def get_key_state(key):
     if scancode <= numkeys.value:
         return keys[scancode]
     return 0
+
