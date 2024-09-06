@@ -126,28 +126,31 @@ class GripApertureRedux(klibs.Experiment):
     def trial_prep(self):
         # shut goggles
         self.board.write(b'56')
-        # extract trial setup
-        self.target, self.distractor = self.arrangement.split('_')
-
-        self.target_loc, _ = self.target.split('-')
-        self.distractor_loc, _ = self.distractor.split('-')
 
         # induce slight uncertainty in the reveal time
         self.evm.add_event(label='go_signal', onset=GO_SIGNAL_ONSET)
         self.evm.add_event(label='response_timeout', onset=RESPONSE_TIMEOUT)
 
-        # TODO: close plato
+        # determine distractor position
+        self.distractor_loc = LEFT if self.target_loc == RIGHT else RIGHT
 
         # setup phase
-        self.present_arrangment(phase='setup')
+        self.present_stimuli(trial_prep=True)
+
+        any_key()  # signal that props are in place
+
+        # present base display
+        self.present_stimuli()
 
         while True:
             q = pump(True)
             if key_pressed(key='space', queue=q):
                 break
+        self.nnc.startup()
 
     def trial(self):
-        self.nnc.startup()
+
+        # TODO: Implement velocity check
 
         self.present_arrangment()
 
@@ -188,6 +191,40 @@ class GripApertureRedux(klibs.Experiment):
 
     def clean_up(self):
         pass
+
+    def present_stimuli(
+        self, trial_prep=False, show_target=False, gbyk_dev=False
+    ):
+        fill()
+
+        if trial_prep:
+            message(
+                'Place props within size-matched rings.\n\nKeypress to start trial.',
+                location=[P.screen_c[0], P.screen_c[1] // 3],
+            )
+
+        if gbyk_dev:
+            message(
+                'GBYK Development Mode\n\nPress any key to reveal target.',
+                location=[P.screen_c[0], P.screen_c[1] // 3],
+            )
+
+        distractor_holder = self.placeholders[DISTRACTOR][self.distractor_size]
+        distractor_holder.fill = GRUE
+
+        target_holder = self.placeholders[TARGET][self.target_size]
+        target_holder.fill = WHITE if show_target else GRUE
+
+        blit(
+            distractor_holder,
+            registration=5,
+            location=self.locs[self.distractor_loc],
+        )
+        blit(
+            target_holder, registration=5, location=self.locs[self.target_loc]
+        )
+
+        flip()
 
     def trial_property_table(self):
         return {
