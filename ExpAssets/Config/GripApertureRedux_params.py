@@ -66,3 +66,5 @@ append_hostname = False
 #########################################
 # PROJECT-SPECIFIC VARS
 #########################################
+expected_marker_count = None
+task_order = ["GBYK", "KBYG"]

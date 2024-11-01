@@ -2,9 +2,12 @@
 
 __author__ = 'Brett Feltmate'
 
-from random import randrange, shuffle
-from csv import DictWriter
+# external imports
 import os
+from random import randrange
+from csv import DictWriter, DictReader
+from pyfirmata import serial
+from pprint import pprint
 
 # local imports
 from get_key_state import get_key_state
@@ -16,11 +19,10 @@ from klibs.KLAudio import Tone
 from klibs.KLCommunication import message
 from klibs.KLExceptions import TrialException
 from klibs.KLGraphics import KLDraw as kld
-from klibs.KLGraphics import blit, clear, fill, flip
-from klibs.KLTime import CountDown
+from klibs.KLGraphics import blit, fill, flip
+from klibs.KLTime import Stopwatch
 from klibs.KLUserInterface import any_key, key_pressed, ui_request
-from klibs.KLUtilities import hide_mouse_cursor, now, pump
-
+from klibs.KLUtilities import hide_mouse_cursor, pump
 
 # experiment constants
 
@@ -55,27 +57,40 @@ TARGET = 'target'
 DISTRACTOR = 'distractor'
 GBYK = 'GBYK'
 KBYG = 'KBYG'
+OPEN = b'55'
+CLOSE = b'56'
 
 
 class GripApertureRedux(klibs.Experiment):
     def setup(self):
-        self.client = NatNetClient()
+        if P.expected_marker_count is None:
+            raise RuntimeError(
+                'Must define a value for expected_marker_count in _params.py!'
+            )
 
-        # placeholder locs
+        # TODO: pull frame to confirm that actual marker count matches expected
+
+        # setup optitrack client
+        self.optitrack = NatNetClient()
+
+        # setup firmata board (plato goggle controller)
+        self.plato = serial.Serial(port='COM6', baudrate=9600)
+
+        # placeholder space 12cm
         self.locs = {  # 12cm between placeholder centers
-            LEFT: (P.screen_c[0] - OFFSET, P.screen_c[1]),
-            RIGHT: (P.screen_c[0] + OFFSET, P.screen_c[1]),
+            LEFT: (P.screen_c[0] - POS_OFFSET, P.screen_c[1]),
+            RIGHT: (P.screen_c[0] + POS_OFFSET, P.screen_c[1]),
         }
 
         # spawn default placeholders
         self.placeholders = {
             TARGET: {
-                SMALL: kld.Annulus(SMALL_DIAM, BRIMWIDTH),
-                LARGE: kld.Annulus(LARGE_DIAM, BRIMWIDTH),
+                SMALL: kld.Annulus(DIAM_SMALL, BRIMWIDTH),
+                LARGE: kld.Annulus(DIAM_LARGE, BRIMWIDTH),
             },
             DISTRACTOR: {
-                SMALL: kld.Annulus(SMALL_DIAM, BRIMWIDTH),
-                LARGE: kld.Annulus(LARGE_DIAM, BRIMWIDTH),
+                SMALL: kld.Annulus(DIAM_SMALL, BRIMWIDTH),
+                LARGE: kld.Annulus(DIAM_LARGE, BRIMWIDTH),
             },
         }
 
@@ -83,33 +98,27 @@ class GripApertureRedux(klibs.Experiment):
             TONE_DURATION, TONE_SHAPE, TONE_FREQ, TONE_VOLUME
         )
 
-        # TODO: Work out optitrack integration
-
-        # randomize task sequence
-        self.task_sequence = [GBYK, KBYG]
-
-        # Stitch in practice block per task if enabled
+        # generate block sequence
         if P.run_practice_blocks:
-            self.task_sequence = [
-                task for task in self.task_sequence for _ in range(2)
+            self.block_sequence = [
+                task for task in P.task_order for _ in range(2)
             ]
             self.insert_practice_block(
                 block_nums=[1, 3], trial_counts=P.trials_per_practice_block
             )
+        else:
+            self.block_sequence = P.task_order
 
     def block(self):
-        if P.practicing:
-            self.mocap_data_dir = f'os.getcwd()/mocap_data/{P.participant_id}/practice/block_{P.block_number}'
+        # grab task for current block
+        try:
+            self.block_task = self.block_sequence[P.block_number]
+        except IndexError:
+            raise RuntimeError(
+                'Block number, somehow, exceeds expected block count.'
+            )
 
-        else:
-            self.mocap_data_dir = f'os.getcwd()/mocap_data/{P.participant_id}/testing/block_{P.block_number}'
-
-        self.client.mocap_data_dir = self.mocap_data_dir
-
-        # grab task
-        self.block_task = self.task_sequence.pop(0)
-
-        # instrux
+        # TODO: actual instructions
         instrux = (
             f'Task: {self.block_task}\n'
             + f'Block: {P.block_number} of {P.blocks_per_experiment}\n'
@@ -124,88 +133,105 @@ class GripApertureRedux(klibs.Experiment):
         any_key()
 
     def trial_prep(self):
-        # shut goggles
-        self.board.write(b'56')
 
-        # induce slight uncertainty in the reveal time
-        self.evm.add_event(label='go_signal', onset=GO_SIGNAL_ONSET)
-        self.evm.add_event(label='response_timeout', onset=RESPONSE_TIMEOUT)
+        self.evm.add_event(
+            label='go_signal', onset=randrange(*GO_SIGNAL_ONSET)
+        )
+        self.evm.add_event(
+            label='response_timeout',
+            onset=RESPONSE_TIMEOUT,
+            after=GO_SIGNAL_ONSET,
+        )
 
-        # determine distractor position
         self.distractor_loc = LEFT if self.target_loc == RIGHT else RIGHT
 
-        # setup phase
-        self.present_stimuli(trial_prep=True)
+        # instruct experimenter on prop placement
+        self.plato.write(CLOSE)
+        self.present_stimuli(prep=True)
 
-        any_key()  # signal that props are in place
+        self.present_stimuli()  # base display
 
-        # present base display
-        self.present_stimuli()
-
-        while True:
+        while True:  # participant readiness signalled by keypress
             q = pump(True)
             if key_pressed(key='space', queue=q):
                 break
-        self.nnc.startup()
 
     def trial(self):
-
-        # TODO: Implement velocity check
-
-        self.present_arrangment()
-
-        go_signal_delay = CountDown(0.3)
-
-        while go_signal_delay.counting():
-            ui_request()
-
-        # open goggles
-        self.board.write(b'55')
         hide_mouse_cursor()
 
-        reaction_timer = Stopwatch(start=True)
+        self.optitrack.startup()
+
+        if self.block_task == 'KBYG':
+            self.present_stimuli(show_target=True)
+
+        # idle until go-signal
+        while self.evm.before('go_signal'):
+            _ = ui_request()
+            if get_key_state('space') == 0:
+                self.evm.reset()
+
+                fill()
+                message(
+                    'Please keep your hand at rest until the go signal.',
+                    location=P.screen_c,
+                    registration=5,
+                )
+                flip()
+
+                raise TrialException(
+                    f'{self.block_task}, B{P.block_number}-T{P.trial_number}: Participant moved before go signal.'
+                )
+
+        self.plato.write(OPEN)  # open goggles
+
         self.go_signal.play()
 
-        rt = 'NA'
+        reaction_timer = Stopwatch(start=True)
+        rt = None  # logs rt to go_signal
         while self.evm.before('response_timeout'):
-            if get_key_state('space') == 0 and rt == 'NA':
-                rt = reaction_timer.elapsed() / 1000
+            _ = ui_request()
 
-        # Stop polling opt data
-        self.nnc.shutdown()
+            if get_key_state('space') == 0 and rt is None:
+                rt = reaction_timer.elapsed()
+
+            elif get_key_state('space') == 1 and rt is not None:
+                self.optitrack.shutdown()  # stop tracking
+                break
+
+            else:
+                # TODO: implement velocity tracking here
+                pass
 
         return {
             'block_num': P.block_number,
             'trial_num': P.trial_number,
             'practicing': P.practicing,
-            'left_right_hand': self.hand_used,
-            'palm_back_hand': self.hand_side,
+            'task_type': self.block_task,
             'target_loc': self.target_loc,
-            'distractor_loc': self.distractor_loc,
-            'response_time': rt,
+            'target_size': self.target_size,
+            'distractor_size': self.distractor_size,
+            'response_time': rt if not None else -1,
         }
 
     def trial_clean_up(self):
-        self.client.data_dir = None
-        self.client.trial_factors = None
+        self.optitrack.data_dir = None
+        self.optitrack.trial_factors = None
 
     def clean_up(self):
         pass
 
-    def present_stimuli(
-        self, trial_prep=False, show_target=False, gbyk_dev=False
-    ):
+    def present_stimuli(self, prep=False, show_target=False, dev_mode=False):
         fill()
 
-        if trial_prep:
+        if prep:
             message(
                 'Place props within size-matched rings.\n\nKeypress to start trial.',
                 location=[P.screen_c[0], P.screen_c[1] // 3],
             )
 
-        if gbyk_dev:
+        if dev_mode:
             message(
-                'GBYK Development Mode\n\nPress any key to reveal target.',
+                '(DevMode)\nAny key to reveal target.',
                 location=[P.screen_c[0], P.screen_c[1] // 3],
             )
 
@@ -226,73 +252,33 @@ class GripApertureRedux(klibs.Experiment):
 
         flip()
 
-    def trial_property_table(self):
-        return {
-            'participant_id': P.participant_id,
-            'practicing': P.practicing,
-            'block_num': P.block_number,
-            'trial_num': P.trial_number,
-            'task_type': self.block_task,
-            'target_size': self.target_size,
-            'target_loc': self.target_loc,
-            'distractor_size': self.distractor_size,
-            'distractor_loc': self.distractor_loc,
-        }
-
-    def rigid_bodies_listener(self, rigid_body):
-        rigid_body.update(self.trial_property_table())
-
-        fname = (
-            f'{self.block_dir}/P{P.p_id}_T{P.trial_number}_rigidbody_data.csv'
-        )
+    def marker_set_listener(self, marker_set: dict) -> None:
+        set_name = marker_set.get('label', 'label_missing')
+        fname = f'{set_name}_markers.csv'
 
         if not os.path.exists(fname):
-            with open(fname, 'a', newline='') as csvfile:
-                writer = csv.DictWriter(csvfile, fieldnames=rigid_body.keys())
-                writer.writeheader()
-
-        with open(fname, 'a', newline='') as csvfile:
-            writer = csv.DictWriter(csvfile, fieldnames=rigid_body.keys())
-            writer.writerow(rigid_body)
-
-    def marker_set_listener(self, marker_set):
-        trial_details = self.trial_property_table()
-
-        fname = f"{self.block_dir}/P{P.p_id}_T{P.trial_number}_{marker_set['label']}_markerset_data.csv"
-
-        if not os.path.exists(fname):
-            sample_marker = marker_set['markers'][0].items()
-            sample_marker.update(trial_details)
-
-            with open(fname, 'a', newline='') as csvfile:
-                writer = csv.DictWriter(
-                    csvfile, fieldnames=sample_marker.keys()
+            with open(fname, 'a', newline='') as file:
+                writer = DictWriter(
+                    file, fieldnames=marker_set['markers'][0].keys()
                 )
                 writer.writeheader()
+        else:
+            with open(fname, 'a', newline='') as file:
+                for marker in marker_set.get('markers', None):
+                    writer = DictWriter(
+                        file, fieldnames=marker_set['markers'][0].keys()
+                    )
+                    writer.writerow(marker)
 
-        with open(fname, 'a', newline='') as csvfile:
-            for marker in marker_set['markers']:
-                marker.update(trial_details)
-                writer = csv.DictWriter(csvfile, fieldnames=marker.keys())
-                writer.writerow(marker)
-
-    def get_hand_position(self):
-        trial_details = self.trial_property_table()
-        fname = f"{self.block_dir}/P{P.p_id}_T{P.trial_number}_{marker_set['hand']}_markerset_data.csv"
-
-        if not os.path.exists(fname):
-            return None
-
+    def get_position(self, set_name: str = 'stick', set_len: int = 5) -> None:
+        fname = f'{set_name}_markers.csv'
         with open(fname, newline='') as csvfile:
-            reader = csv.DictReader(fname)
-            rows = list(reader)
+            reader = DictReader(csvfile)
+            lines = list(reader)
+            print('\n\n-----------------')
+            print(f'\n\nLast line in {fname} reads:\n\n')
+            pprint(lines[-1])
+            print('\n\n')
+            print('-----------------\n\n')
 
-            if len(rows) >= 5:
-                # NOTE: 5 markers used to track hand; avg over set to get hand pos
-                x_pos = sum([row['pos_x'] for row in rows[-5:]]) / 5
-                y_pos = sum([row['pos_y'] for row in rows[-5:]]) / 5
-                z_pos = sum([row['pos_z'] for row in rows[-5:]]) / 5
-
-                return x_pos, y_pos, z_pos
-            else:
-                return None
+            return None
