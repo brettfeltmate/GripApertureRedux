@@ -13,6 +13,8 @@ from pprint import pprint
 from get_key_state import get_key_state
 from NatNetClient import NatNetClient
 
+from math import sqrt
+
 import klibs
 from klibs import P
 from klibs.KLAudio import Tone
@@ -72,6 +74,7 @@ class GripApertureRedux(klibs.Experiment):
 
         # setup optitrack client
         self.optitrack = NatNetClient()
+        self.optitrack.marker_listener = self.__marker_set_listener
 
         # setup firmata board (plato goggle controller)
         self.plato = serial.Serial(port='COM6', baudrate=9600)
@@ -252,36 +255,77 @@ class GripApertureRedux(klibs.Experiment):
 
         flip()
 
-    def marker_set_listener(self, marker_set: dict) -> None:
-        set_name = marker_set.get('label', 'label_missing')
-        fname = f'{set_name}_markers.csv'
+    def get_velocity(self) -> float:
+        for p in ['set_name', 'set_len', 'framerate']:
+            if P.get(p) is None:
+                raise ValueError(f'{p} not defined in _params')
+
+        frames = self.__query_frames(2)
+
+        demarkation = len(frames) // 2
+        prev_pos = self.__colwise_means(frames[0:demarkation])
+        curr_pos = self.__colwise_means(frames[demarkation:])
+
+        travel = self.__euclidean_distance(prev_pos, curr_pos)
+
+        return self.__derivate(travel)
+
+    def __euclidean_distance(
+        self,
+        ref_pos: tuple[float, float, float],
+        curr_pos: tuple[float, float, float],
+    ):
+        return sqrt(sum([(curr_pos[i] - ref_pos[i]) ** 2 for i in range(3)]))
+
+    def __colwise_means(
+        self, frames: tuple[tuple[float, float, float]]
+    ) -> tuple[float, float, float]:
+
+        if not all(len(frame) == 3 for frame in frames):
+            raise ValueError('Frames must be xyz tuples.')
+
+        # stack coords by transposing frames, then average columns
+        return tuple(sum(column) / len(frames) for column in zip(*frames))
+
+    def __derivate(self, value: float) -> float:
+        return value / (1 / P.framerate)
+
+    def __marker_set_listener(self, marker_set: dict) -> None:
+        fname = f'{P.set_name}_markers.csv'
+
+        with open(fname, 'a', newline='') as file:
+            writer = DictWriter(
+                file, fieldnames=marker_set['markers'][0].keys()
+            )
+            if not os.path.exists(fname):
+                writer.writeheader()
+
+            for marker in marker_set.get('markers', None):
+                writer.writerow(marker)
+
+    def __query_frames(self, n_frames: int = 2) -> list:
+        fname = f'{P.set_name}_markers.csv'
 
         if not os.path.exists(fname):
-            with open(fname, 'a', newline='') as file:
-                writer = DictWriter(
-                    file, fieldnames=marker_set['markers'][0].keys()
-                )
-                writer.writeheader()
-        else:
-            with open(fname, 'a', newline='') as file:
-                for marker in marker_set.get('markers', None):
-                    writer = DictWriter(
-                        file, fieldnames=marker_set['markers'][0].keys()
-                    )
-                    writer.writerow(marker)
-
-    def query_markers(self, file: str, numM: int, numF: int) -> list:
-
-        fname = f'{file}_markers.csv'
+            raise FileNotFoundError(f"Marker data file '{fname}' not found")
 
         with open(fname, newline='') as csvfile:
             reader = DictReader(csvfile)
 
             rows = list(reader)
-            frames = [[] for _ in range(numF)]
 
-            for frame in range(frames):
-                for marker in range(numM):
-                    frames[frame].append(rows[-(frame * numM + marker)])
+            if len(rows) < n_frames * P.set_len:
+                raise ValueError(
+                    'Insufficient data to query frames. '
+                    + f'Expected {n_frames * P.set_len} rows, got {len(rows)}.'
+                )
+
+            frames = [[] for _ in range(n_frames)]
+
+            for frame in range(n_frames):
+                for marker in range(P.set_len):
+                    frames[frame].append(
+                        float(rows[-(frame * P.set_len + marker)])
+                    )
 
         return frames

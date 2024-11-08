@@ -68,3 +68,6 @@ append_hostname = False
 #########################################
 expected_marker_count = None
 task_order = ["GBYK", "KBYG"]
+framerate = 120
+set_name = None
+set_len = None
