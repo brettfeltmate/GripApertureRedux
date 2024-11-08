@@ -270,15 +270,18 @@ class GripApertureRedux(klibs.Experiment):
                     )
                     writer.writerow(marker)
 
-    def get_position(self, set_name: str = 'stick', set_len: int = 5) -> None:
-        fname = f'{set_name}_markers.csv'
+    def query_markers(self, file: str, numM: int, numF: int) -> list:
+
+        fname = f'{file}_markers.csv'
+
         with open(fname, newline='') as csvfile:
             reader = DictReader(csvfile)
-            lines = list(reader)
-            print('\n\n-----------------')
-            print(f'\n\nLast line in {fname} reads:\n\n')
-            pprint(lines[-1])
-            print('\n\n')
-            print('-----------------\n\n')
 
-            return None
+            rows = list(reader)
+            frames = [[] for _ in range(numF)]
+
+            for frame in range(frames):
+                for marker in range(numM):
+                    frames[frame].append(rows[-(frame * numM + marker)])
+
+        return frames

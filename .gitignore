@@ -1,5 +1,6 @@
 **/*.pyc
 **/.*
+scratch.py
 !.gitignore
 ExpAssets/*.db
 ExpAssets/*.db.backup
