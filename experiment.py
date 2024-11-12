@@ -395,7 +395,7 @@ class GripApertureRedux(klibs.Experiment):
             for marker in marker_set.get('markers', None):
                 writer.writerow(marker)
 
-    def __query_frames(self, n_frames: int = 2) -> list:
+    def __query_frames(self, n_frames: int = 5) -> list:
         """Read the last n_frames worth of marker data from CSV file.
 
         Args:
