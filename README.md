@@ -11,7 +11,7 @@ Running this paradigm requires that you have:
 - An Optitrack motion-capture system
 - A pair of occlusion goggles (i.e., PLATO)
 - An arduino board (for controlling goggles)
-- KLibs (a python-based experiment development framework)
+- KLibs (python-based experiment development framework)
 
 As it stands, an Optitrack system is a hard requirement. In theory both the brand of goggles or arduino board shouldn't matter too much, though the code would need to be adapted accordingly. KLibs is also necessary. 
 
