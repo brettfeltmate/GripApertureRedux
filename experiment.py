@@ -7,12 +7,11 @@ import os
 from random import randrange
 from csv import DictWriter, DictReader
 from pyfirmata import serial
+from math import sqrt
 
 # local imports
 from get_key_state import get_key_state
 from NatNetClient import NatNetClient
-
-from math import sqrt
 
 import klibs
 from klibs import P
@@ -220,6 +219,8 @@ class GripApertureRedux(klibs.Experiment):
 
         self.go_signal.play()   # play go-signal
         self.plato.write(OPEN)  # open goggles
+
+        # TODO: ensure that velocity never falls below threshold; terminate trial if so.
 
         # monitor movements until trial completion
         while self.evm.before('trial_finished'):
