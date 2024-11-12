@@ -71,8 +71,6 @@ class GripApertureRedux(klibs.Experiment):
                 + '\n\tThis value MUST MATCH the number of markers comprising the tracked hand!'
             )
 
-        # TODO: pull frame to confirm that actual marker count matches expected
-
         # setup optitrack client
         self.optitrack = NatNetClient()
         # pass marker set listener to client for callback
@@ -118,11 +116,11 @@ class GripApertureRedux(klibs.Experiment):
         if not os.path.exists('OptiData'):
             os.mkdir('OptiData')
 
-        os.mkdir(f"OptiData/{P.p_id}")
-        os.mkdir(f"OptiData/{P.p_id}/testing")
+        os.mkdir(f'OptiData/{P.p_id}')
+        os.mkdir(f'OptiData/{P.p_id}/testing')
 
         if P.run_practice_blocks:
-            os.mkdir(f"OptiData/{P.p_id}/practice")
+            os.mkdir(f'OptiData/{P.p_id}/practice')
 
     def block(self):
 
@@ -135,7 +133,7 @@ class GripApertureRedux(klibs.Experiment):
                 'Block number, somehow, exceeds expected block count.'
             )
 
-        self.block_dir = f"OptiData/{P.p_id}"
+        self.block_dir = f'OptiData/{P.p_id}'
         self.block_dir += '/practice' if P.practicing else '/testing'
         self.block_dir += f'/{self.block_task}'
 
@@ -264,6 +262,7 @@ class GripApertureRedux(klibs.Experiment):
     def clean_up(self):
         pass
 
+    # conditionally present stimuli
     def __present_stimuli(self, prep=False, target=False, dev=False):
         fill()
 
@@ -299,13 +298,14 @@ class GripApertureRedux(klibs.Experiment):
     def __get_velocity(self) -> float:
         """Calculate instantaneous velocity from the last two frames of marker data.
 
-        Requires parameters 'set_name', 'set_len', and 'framerate' to be defined in P.
-
         Returns:
             float: Instantaneous velocity in units per second.
 
         Raises:
             ValueError: If required parameters are not defined in _params.
+
+        Notes:
+            Requires parameters 'set_name', 'set_len', and 'framerate' to be defined in P.
         """
         for p in ['set_name', 'set_len', 'framerate']:
             if P.get(p) is None:
@@ -352,7 +352,7 @@ class GripApertureRedux(klibs.Experiment):
             ValueError: If any frame does not contain exactly 3 coordinates.
         """
         if not all(len(frame) == 3 for frame in frames):
-            raise ValueError('Frames must be xyz tuples.')
+            raise ValueError('Frames must be tuples containing xyz tuples.')
 
         # stack coords by transposing frames, then average columns
         return tuple(sum(column) / len(frames) for column in zip(*frames))
@@ -378,7 +378,10 @@ class GripApertureRedux(klibs.Experiment):
             marker_set (dict): Dictionary containing marker data to be written.
                 Expected format: {'markers': [{'key1': val1, ...}, ...]}
         """
-        fname = f'{self.block_dir}/trial_{P.trial_number}_{P.set_name}_markers.csv'
+        # Append data to trial-specific CSV file
+        fname = (
+            f'{self.block_dir}/trial_{P.trial_number}_{P.set_name}_markers.csv'
+        )
 
         with open(fname, 'a', newline='') as file:
             writer = DictWriter(
@@ -409,12 +412,17 @@ class GripApertureRedux(klibs.Experiment):
             The expected value is computed assuming one row per marker contained in the set,
             times the number queried frames.
 
-            A more stable solution would be to do an initial query of all tracked markers present at runtime.
+            A more stable solution would be query number of tracked markers at runtime, and compare against expected count.
         """
-        fname = f'{self.block_dir}/trial_{P.trial_number}_{P.set_name}_markers.csv'
+
+        fname = (
+            f'{self.block_dir}/trial_{P.trial_number}_{P.set_name}_markers.csv'
+        )
 
         if not os.path.exists(fname):
-            raise FileNotFoundError(f"Marker data file not found at:\n{fname}!")
+            raise FileNotFoundError(
+                f'Marker data file not found at:\n{fname}!'
+            )
 
         with open(fname, newline='') as csvfile:
             reader = DictReader(csvfile)
