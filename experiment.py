@@ -113,6 +113,7 @@ class GripApertureRedux(klibs.Experiment):
         else:
             self.block_sequence = P.task_order
 
+        # create data directories
         if not os.path.exists('OptiData'):
             os.mkdir('OptiData')
 
