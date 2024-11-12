@@ -1,5 +1,13 @@
 from klibs.KLStructure import FactorSet
 
+exp_factors = FactorSet(
+    {
+        'distractor_size': ['small', 'large'],
+        'target_size': ['small', 'large'],
+        'target_loc': ['left', 'right'],
+    }
+)
+
 """ ##### FactorSet Tutorial #####
 
 This file specifies the different trial factors and their levels for the experiment.
@@ -13,7 +21,7 @@ from trial to trial:
   3) The onset delay between the cue and target (200, 400, or 800 ms)
   4) The presence of an auditory alerting tone (present or absent)
 
-In addition to the above, let's say you want cues to be valid 66% of the time. To 
+In addition to the above, let's say you want cues to be valid 66% of the time. To
 specify this sort of factor structure, you can do something like this:
 
 exp_factors = FactorSet({
@@ -46,7 +54,3 @@ If a level of a factor is repeated multiple times (e.g. 3 valid cues per invalid
 you can also note this using a `(level, count)` tuple as shorthand, e.g. `('valid', 3)`.
 
 """
-
-exp_factors = FactorSet({
-    # Insert trial factors here
-})

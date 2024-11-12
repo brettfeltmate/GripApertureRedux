@@ -26,10 +26,10 @@
             "active": true
         },
         {
-            "title": "gender",
-            "database_field": "gender",
-            "query": "What is your gender?\nAnswer with: (m)ale, (f)emale, or (n)on-binary",
-            "accepted": ["m", "f", "n"],
+            "title": "sex",
+            "database_field": "sex",
+            "query": "What is your sex?\nAnswer with: (m)ale, (f)emale, (i)ntersex, or (p)refer not to say",
+            "accepted": ["m", "f", "i", "p"],
             "allow_null": false,
             "format": {
                 "type": "str",
@@ -41,7 +41,7 @@
                 "accept_as_true": null,
                 "action": null
             },
-            "anonymous_value": "n",
+            "anonymous_value": "p",
             "active": true
         },
         {

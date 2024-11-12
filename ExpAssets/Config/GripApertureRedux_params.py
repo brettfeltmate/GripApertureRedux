@@ -68,6 +68,8 @@ append_hostname = False
 #########################################
 expected_marker_count = None
 task_order = ["GBYK", "KBYG"]
-framerate = 120
+framerate = 120  # in Hz
 set_name = None
 set_len = None
+velocity_threshold = 0.5  # in meters/sec
+trials_per_practice_block = 8
