@@ -1,38 +1,38 @@
 # -*- coding: utf-8 -*-
 
-__author__ = 'Brett Feltmate'
+__author__ = "Brett Feltmate"
 
 # external imports
 import os
-from random import randrange
-from csv import DictWriter, DictReader
-from pyfirmata import serial
+from csv import DictReader, DictWriter
 from math import sqrt
-
-# local imports
-from get_key_state import get_key_state
-from NatNetClient import NatNetClient
+from random import randrange
 
 import klibs
+
+# local imports
+from get_key_state import get_key_state  # type: ignore[import]
 from klibs import P
 from klibs.KLAudio import Tone
 from klibs.KLCommunication import message
 from klibs.KLExceptions import TrialException
 from klibs.KLGraphics import KLDraw as kld
 from klibs.KLGraphics import blit, fill, flip
-from klibs.KLTime import Stopwatch
 from klibs.KLUserInterface import any_key, key_pressed, ui_request
 from klibs.KLUtilities import hide_mouse_cursor, pump
+from klibs.KLBoundary import CircleBoundary
+from natnetclient_rough import NatNetClient  # type: ignore[import]
+from pyfirmata import serial
 
 # experiment constants
 
 # timings
 GO_SIGNAL_ONSET = (500, 2000)
-TRIAL_DURATION_POST_GO_SIGNAL = 3000
+TRIAL_DURATION_POST_GO_SIGNAL = 500
 
 # audio
 TONE_DURATION = 50
-TONE_SHAPE = 'sine'
+TONE_SHAPE = "sine"
 TONE_FREQ = 784  # ridin' on yo G5 airplane
 TONE_VOLUME = 0.5
 
@@ -49,25 +49,25 @@ WHITE = (255, 255, 255, 255)
 GRUE = (90, 90, 96, 255)
 
 # anti-typo protections
-LEFT = 'left'
-RIGHT = 'right'
-SMALL = 'small'
-LARGE = 'large'
-TARGET = 'target'
-DISTRACTOR = 'distractor'
-GBYK = 'GBYK'
-KBYG = 'KBYG'
-OPEN = b'55'
-CLOSE = b'56'
+LEFT = "left"
+RIGHT = "right"
+SMALL = "small"
+LARGE = "large"
+TARGET = "target"
+DISTRACTOR = "distractor"
+GBYK = "GBYK"
+KBYG = "KBYG"
+OPEN = b"55"
+CLOSE = b"56"
 
 
 class GripApertureRedux(klibs.Experiment):
     def setup(self):
         # ensure marker count expectations are set in _params.py
-        if P.expected_marker_count is None:
+        if P.expected_marker_count is None:  # type: ignore[attr-defined]
             raise RuntimeError(
-                'Need to set a value for expected_marker_count in _params.py'
-                + '\n\tThis value MUST MATCH the number of markers comprising the tracked hand!'
+                "Need to set a value for expected_marker_count in _params.py"
+                + "\n\tThis value MUST MATCH the number of tracked markers"
             )
 
         # setup optitrack client
@@ -76,12 +76,12 @@ class GripApertureRedux(klibs.Experiment):
         self.optitrack.marker_listener = self.__marker_set_listener
 
         # setup firmata board (plato goggle controller)
-        self.plato = serial.Serial(port='COM6', baudrate=9600)
+        self.plato = serial.Serial(port="COM6", baudrate=9600)
 
         # placeholder space 12cm
         self.locs = {  # 12cm between placeholder centers
-            LEFT: (P.screen_c[0] - POS_OFFSET, P.screen_c[1]),
-            RIGHT: (P.screen_c[0] + POS_OFFSET, P.screen_c[1]),
+            LEFT: (P.screen_c[0] - POS_OFFSET, P.screen_c[1]),  # type: ignore[attr-defined]
+            RIGHT: (P.screen_c[0] + POS_OFFSET, P.screen_c[1]),  # type: ignore[attr-defined]
         }
 
         # spawn object placeholders
@@ -97,30 +97,26 @@ class GripApertureRedux(klibs.Experiment):
         }
 
         # spawn go signal
-        self.go_signal = Tone(
-            TONE_DURATION, TONE_SHAPE, TONE_FREQ, TONE_VOLUME
-        )
+        self.go_signal = Tone(TONE_DURATION, TONE_SHAPE, TONE_FREQ, TONE_VOLUME)
 
         # generate block sequence
         if P.run_practice_blocks:
-            self.block_sequence = [
-                task for task in P.task_order for _ in range(2)
-            ]
+            self.block_sequence = [task for task in P.task_order for _ in range(2)]  # type: ignore[attr-defined]
             self.insert_practice_block(
-                block_nums=[1, 3], trial_counts=P.trials_per_practice_block
+                block_nums=[1, 3], trial_counts=P.trials_per_practice_block  # type: ignore[attr-defined]
             )
         else:
-            self.block_sequence = P.task_order
+            self.block_sequence = P.task_order  # type: ignore[attr-defined]
 
         # create data directories
-        if not os.path.exists('OptiData'):
-            os.mkdir('OptiData')
+        if not os.path.exists("OptiData"):
+            os.mkdir("OptiData")
 
-        os.mkdir(f'OptiData/{P.p_id}')
-        os.mkdir(f'OptiData/{P.p_id}/testing')
+        os.mkdir(f"OptiData/{P.p_id}")
+        os.mkdir(f"OptiData/{P.p_id}/testing")
 
         if P.run_practice_blocks:
-            os.mkdir(f'OptiData/{P.p_id}/practice')
+            os.mkdir(f"OptiData/{P.p_id}/practice")
 
     def block(self):
 
@@ -129,27 +125,23 @@ class GripApertureRedux(klibs.Experiment):
             self.block_task = self.block_sequence[P.block_number]
         # probably impossible, but just in case
         except IndexError:
-            raise RuntimeError(
-                'Block number, somehow, exceeds expected block count.'
-            )
+            raise RuntimeError("Block number, somehow, exceeds expected block count.")
 
-        self.block_dir = f'OptiData/{P.p_id}'
-        self.block_dir += '/practice' if P.practicing else '/testing'
-        self.block_dir += f'/{self.block_task}'
+        self.block_dir = f"OptiData/{P.p_id}"
+        self.block_dir += "/practice" if P.practicing else "/testing"
+        self.block_dir += f"/{self.block_task}"
 
-        if exists := os.path.exists(self.block_dir):
-            raise RuntimeError(
-                f'Data directory "{self.block_dir}" already exists.'
-            )
+        if os.path.exists(self.block_dir):
+            raise RuntimeError(f'Data directory "{self.block_dir}" already exists.')
 
         os.mkdir(self.block_dir)
 
         # TODO: actual instructions
         instrux = (
-            f'Task: {self.block_task}\n'
-            + f'Block: {P.block_number} of {P.blocks_per_experiment}\n'
-            + '(Instrux TBD, grab stuff)'
-            + '\n\nAny key to start block.'
+            f"Task: {self.block_task}\n"
+            + f"Block: {P.block_number} of {P.blocks_per_experiment}\n"
+            + "(Instrux TBD, grab stuff)"
+            + "\n\nAny key to start block."
         )
 
         fill()
@@ -161,17 +153,28 @@ class GripApertureRedux(klibs.Experiment):
     def trial_prep(self):
 
         # setup trial events/timings
+        self.evm.add_event(label="go_signal", onset=randrange(*GO_SIGNAL_ONSET))
         self.evm.add_event(
-            label='go_signal', onset=randrange(*GO_SIGNAL_ONSET)
-        )
-        self.evm.add_event(
-            label='trial_finished',
+            label="trial_finished",
             onset=TRIAL_DURATION_POST_GO_SIGNAL,
-            after='go_signal',
+            after="go_signal",
         )
 
         # determine targ/dist locations
-        self.distractor_loc = LEFT if self.target_loc == RIGHT else RIGHT
+        self.distractor_loc = LEFT if self.target_loc == RIGHT else RIGHT  # type: ignore[attr-defined]
+
+        self.boundaries = {
+            TARGET: CircleBoundary(
+                label="target",
+                center=self.locs[self.target_loc],  # type: ignore[attr-defined]
+                radius=self.target_size,  # type: ignore[attr-defined]
+            ),
+            DISTRACTOR: CircleBoundary(
+                label="distractor",
+                center=self.locs[self.distractor_loc],  # type: ignore[attr-defined]
+                radius=self.distractor_size,  # type: ignore[attr-defined]
+            ),
+        }
 
         # instruct experimenter on prop placements
         self.plato.write(CLOSE)
@@ -179,13 +182,13 @@ class GripApertureRedux(klibs.Experiment):
 
         while True:  # participant readiness signalled by keypress
             q = pump(True)
-            if key_pressed(key='space', queue=q):
+            if key_pressed(key="space", queue=q):
                 break
 
         self.__present_stimuli()  # reset display for trial start
         self.optitrack.startup()  # start marker tracking
 
-    def trial(self):
+    def trial(self):  # type: ignore[override]
         # ad-hoc control flags
         rt = None
         velocity = None
@@ -194,49 +197,48 @@ class GripApertureRedux(klibs.Experiment):
         hide_mouse_cursor()
 
         # immediately present trials in KBYG trials
-        if self.block_task == 'KBYG':
+        if self.block_task == "KBYG":
             self.__present_stimuli(target=True)
 
         # restrict movement until go signal received
-        while self.evm.before('go_signal'):
+        while self.evm.before("go_signal"):
             _ = ui_request()
-            if get_key_state('space') == 0:
+            if get_key_state("space") == 0:
                 self.evm.reset()
 
                 fill()
                 message(
-                    'Please keep your hand at rest until hearing the go signal.',
+                    "Please keep your hand at rest until hearing the go signal.",
                     location=P.screen_c,
                     registration=5,
                 )
                 flip()
 
                 raise TrialException(
-                    f'{self.block_task}, B{P.block_number}-T{P.trial_number}: Participant moved before go signal.'
+                    # TODO: write log of recycled trials
+                    f"{self.block_task}, B{P.block_number}-T{P.trial_number}: Participant moved before go signal."
                 )
         # used to calculate RT, also logged for analysis purposes
-        go_signal_onset_time = self.evm.trial_time_ms()
+        go_signal_onset_time = self.evm.trial_time_ms
 
-        self.go_signal.play()   # play go-signal
+        self.go_signal.play()  # play go-signal
         self.plato.write(OPEN)  # open goggles
 
-        # TODO: ensure that velocity never falls below threshold; terminate trial if so.
-
         # monitor movements until trial completion
-        while self.evm.before('trial_finished'):
+        while self.evm.before("trial_finished"):
             _ = ui_request()
 
             # key release indicates reach is (presumeably) in motion
-            if get_key_state('space') == 0 and rt is None:
+            if get_key_state("space") == 0 and rt is None:
                 # rt = time between go signal and keyrelease
-                rt = self.evm.trial_time_ms() - go_signal_onset_time
+                rt = self.evm.trial_time_ms - go_signal_onset_time
 
             # if this is a GBYK trial, and reach is ongoing, monitor velocity
-            if rt is not None and self.block_task == 'GBYK':
+            if rt is not None and self.block_task == "GBYK":
                 velocity = self.__get_velocity()
                 # present target once velocity threshold is met (and target is not already visible)
                 if (
-                    velocity >= P.velocity_threshold
+                    velocity >= P.velocity_threshold  # type: ignore[unknown-attr]
                     and not gbyk_target_is_visible
                 ):
                     self.__present_stimuli(target=True)
@@ -246,16 +248,16 @@ class GripApertureRedux(klibs.Experiment):
         self.optitrack.shutdown()
 
         return {
-            'block_num': P.block_number,
-            'trial_num': P.trial_number,
-            'practicing': P.practicing,
-            'task_type': self.block_task,
-            'target_loc': self.target_loc,
-            'target_size': self.target_size,
-            'distractor_size': self.distractor_size,
-            'go_signal_onset': go_signal_onset_time,
-            'velocity': velocity if not None else -1,
-            'response_time': rt if not None else -1,
+            "block_num": P.block_number,
+            "trial_num": P.trial_number,
+            "practicing": P.practicing,
+            "task_type": self.block_task,
+            "target_loc": self.target_loc,  # type: ignore[attr-defined]
+            "target_size": self.target_size,  # type: ignore[attr-defined]
+            "distractor_size": self.distractor_size,  # type: ignore[attr-defined]
+            "go_signal_onset": go_signal_onset_time,
+            "velocity": velocity if not None else -1,
+            "response_time": rt if not None else -1,
         }
 
     def trial_clean_up(self):
@@ -270,20 +272,20 @@ class GripApertureRedux(klibs.Experiment):
 
         if prep:
             message(
-                'Place props within size-matched rings.\n\nKeypress to start trial.',
-                location=[P.screen_c[0], P.screen_c[1] // 3],
+                "Place props within size-matched rings.\n\nKeypress to start trial.",
+                location=[P.screen_c[0], P.screen_c[1] // 3],  # type: ignore[attr-defined]
             )
 
         if dev:
             message(
-                '(DevMode)\nAny key to reveal target.',
-                location=[P.screen_c[0], P.screen_c[1] // 3],
+                "(DevMode)\nAny key to reveal target.",
+                location=[P.screen_c[0], P.screen_c[1] // 3],  # type: ignore[attr-defined]
             )
 
-        distractor_holder = self.placeholders[DISTRACTOR][self.distractor_size]
+        distractor_holder = self.placeholders[DISTRACTOR][self.distractor_size]  # type: ignore[attr-defined]
         distractor_holder.fill = GRUE
 
-        target_holder = self.placeholders[TARGET][self.target_size]
+        target_holder = self.placeholders[TARGET][self.target_size]  # type: ignore[attr-defined]
         target_holder.fill = WHITE if target else GRUE
 
         blit(
@@ -291,9 +293,7 @@ class GripApertureRedux(klibs.Experiment):
             registration=5,
             location=self.locs[self.distractor_loc],
         )
-        blit(
-            target_holder, registration=5, location=self.locs[self.target_loc]
-        )
+        blit(target_holder, registration=5, location=self.locs[self.target_loc])  # type: ignore[attr-defined]
 
         flip()
 
@@ -309,15 +309,17 @@ class GripApertureRedux(klibs.Experiment):
         Notes:
             Requires parameters 'set_name', 'set_len', and 'framerate' to be defined in P.
         """
-        for p in ['set_name', 'set_len', 'framerate']:
-            if P.get(p) is None:
-                raise ValueError(f'{p} not defined in _params')
+        for p in ["set_name", "set_len", "framerate"]:
+            if not hasattr(P, p):
+                raise ValueError(
+                    f"P.{p} unavailable, did you forget to define it in _params.py?"
+                )
 
         frames = self.__query_frames(n_frames=2)
 
         demarkation_point = len(frames) // 2
-        prev_pos = self.__colwise_means(frames[0:demarkation_point])
-        curr_pos = self.__colwise_means(frames[demarkation_point:])
+        prev_pos = self.__colwise_means(frames[0:demarkation_point])  # type: ignore[attr-defined]
+        curr_pos = self.__colwise_means(frames[demarkation_point:])  # type: ignore[attr-defined]
 
         travel = self.__euclidean_distance(prev_pos, curr_pos)
 
@@ -354,14 +356,24 @@ class GripApertureRedux(klibs.Experiment):
             ValueError: If any frame does not contain exactly 3 coordinates.
         """
         if not all(len(frame) == 3 for frame in frames):
-            raise ValueError('Frames must be tuples containing xyz tuples.')
+            raise ValueError("Frames must be tuples containing xyz tuples.")
 
         # stack coords by transposing frames, then average columns
-        return tuple(sum(column) / len(frames) for column in zip(*frames))
+        col_means = tuple(sum(column) / len(frames) for column in zip(*frames))
 
-    def __derivate(
-        self, delta: float, sampling_rate: int = P.framerate
-    ) -> float:
+        # ensure that the result is a tuple of 3 floats
+        if len(col_means) != 3 or not all(
+            isinstance(mean, float) for mean in col_means
+        ):
+            raise ValueError(
+                "Expected to produce a tuple of 3 floats.\n"
+                + f"Actual result was: {col_means}"
+            )
+
+        else:
+            return col_means
+
+    def __derivate(self, delta: float, sampling_rate: int = P.framerate) -> float:  # type: ignore[attr-defined]
         """Calculate time derivative of a value using supplied sampling rate.
 
         Args:
@@ -381,18 +393,14 @@ class GripApertureRedux(klibs.Experiment):
                 Expected format: {'markers': [{'key1': val1, ...}, ...]}
         """
         # Append data to trial-specific CSV file
-        fname = (
-            f'{self.block_dir}/trial_{P.trial_number}_{P.set_name}_markers.csv'
-        )
+        fname = f"{self.block_dir}/trial_{P.trial_number}_{P.set_name}_markers.csv"  # type: ignore[attr-defined]
 
-        with open(fname, 'a', newline='') as file:
-            writer = DictWriter(
-                file, fieldnames=marker_set['markers'][0].keys()
-            )
+        with open(fname, "a", newline="") as file:
+            writer = DictWriter(file, fieldnames=marker_set["markers"][0].keys())
             if not os.path.exists(fname):
                 writer.writeheader()
 
-            for marker in marker_set.get('markers', None):
+            for marker in marker_set.get("markers", None):
                 writer.writerow(marker)
 
     def __query_frames(self, n_frames: int = 5) -> list:
@@ -417,25 +425,21 @@ class GripApertureRedux(klibs.Experiment):
             A more stable solution would be query number of tracked markers at runtime, and compare against expected count.
         """
 
-        fname = (
-            f'{self.block_dir}/trial_{P.trial_number}_{P.set_name}_markers.csv'
-        )
+        fname = f"{self.block_dir}/trial_{P.trial_number}_{P.set_name}_markers.csv"  # type: ignore[attr-defined]
 
         if not os.path.exists(fname):
-            raise FileNotFoundError(
-                f'Marker data file not found at:\n{fname}!'
-            )
+            raise FileNotFoundError(f"Marker data file not found at:\n{fname}!")
 
-        with open(fname, newline='') as csvfile:
+        with open(fname, newline="") as csvfile:
             reader = DictReader(csvfile)
 
             rows = list(reader)
 
             # Insufficient data means something is broken
-            if len(rows) < n_frames * P.set_len:
+            if len(rows) < n_frames * P.set_len:  # type: ignore[attr-defined]
                 raise ValueError(
-                    'Insufficient data to query frames. '
-                    + f'Expected {n_frames * P.set_len} rows, got {len(rows)}.'
+                    "Insufficient data to query frames. "
+                    + f"Expected {n_frames * P.set_len} rows, got {len(rows)}."  # type: ignore[attr-defined]
                 )
 
             frames = [[] for _ in range(n_frames)]
@@ -450,9 +454,7 @@ class GripApertureRedux(klibs.Experiment):
             #   Frame 0, Marker 0: -0, Frame 0, Marker 1: -1, Frame 0, Marker 2: -2
             #   Frame 1, Marker 0: -3, Frame 1, Marker 1: -4, Frame 1, Marker 2: -5
             for frame in range(n_frames):
-                for marker in range(P.set_len):
-                    frames[frame].append(
-                        float(rows[-(frame * P.set_len + marker)])
-                    )
+                for marker in range(P.set_len):  # type: ignore[attr-defined]
+                    frames[frame].append(float(rows[-(frame * P.set_len + marker)]))  # type: ignore[attr-defined]
 
         return frames
