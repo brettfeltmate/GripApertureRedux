@@ -5,7 +5,6 @@ __author__ = "Brett Feltmate"
 # external imports
 import os
 from csv import DictReader, DictWriter
-from math import sqrt
 from random import randrange
 
 import klibs
@@ -22,6 +21,7 @@ from klibs.KLUserInterface import any_key, key_pressed, ui_request
 from klibs.KLUtilities import hide_mouse_cursor, pump
 from klibs.KLBoundary import CircleBoundary
 from natnetclient_rough import NatNetClient  # type: ignore[import]
+from Kinematics import Kinematics # type: ignore[import]
 from pyfirmata import serial
 
 # experiment constants
@@ -70,10 +70,16 @@ class GripApertureRedux(klibs.Experiment):
                 + "\n\tThis value MUST MATCH the number of tracked markers"
             )
 
+        self.kine = Kinematics()
+
         # setup optitrack client
-        self.optitrack = NatNetClient()
+        self.nnc = NatNetClient()
+
         # pass marker set listener to client for callback
-        self.optitrack.marker_listener = self.__marker_set_listener
+        self.nnc.markers_listener = self.marker_set_listener
+        self.nnc.rigid_bodies_listener = self.rigid_bodies_listener
+        self.nnc.legacy_markers_listener = self.legacy_markers_listener
+
 
         # setup firmata board (plato goggle controller)
         self.plato = serial.Serial(port="COM6", baudrate=9600)
@@ -132,7 +138,7 @@ class GripApertureRedux(klibs.Experiment):
         self.block_dir += f"/{self.block_task}"
 
         if os.path.exists(self.block_dir):
-            raise RuntimeError(f'Data directory "{self.block_dir}" already exists.')
+            raise RuntimeError(f'Data directory already exists at {self.block_dir}')
 
         os.mkdir(self.block_dir)
 
@@ -178,15 +184,15 @@ class GripApertureRedux(klibs.Experiment):
 
         # instruct experimenter on prop placements
         self.plato.write(CLOSE)
-        self.__present_stimuli(prep=True)
+        self.present_stimuli(prep=True)
 
         while True:  # participant readiness signalled by keypress
             q = pump(True)
             if key_pressed(key="space", queue=q):
                 break
 
-        self.__present_stimuli()  # reset display for trial start
-        self.optitrack.startup()  # start marker tracking
+        self.present_stimuli()  # reset display for trial start
+        self.nnc.startup()  # start marker tracking
 
     def trial(self):  # type: ignore[override]
         # ad-hoc control flags
@@ -198,7 +204,7 @@ class GripApertureRedux(klibs.Experiment):
 
         # immediately present trials in KBYG trials
         if self.block_task == "KBYG":
-            self.__present_stimuli(target=True)
+            self.present_stimuli(target=True)
 
         # restrict movement until go signal received
         while self.evm.before("go_signal"):
@@ -224,7 +230,7 @@ class GripApertureRedux(klibs.Experiment):
         self.go_signal.play()  # play go-signal
         self.plato.write(OPEN)  # open goggles
 
-        # monitor movements until trial completion
+        # monitor for movement start
         while self.evm.before("trial_finished"):
             _ = ui_request()
 
@@ -232,20 +238,24 @@ class GripApertureRedux(klibs.Experiment):
             if get_key_state("space") == 0 and rt is None:
                 # rt = time between go signal and keyrelease
                 rt = self.evm.trial_time_ms - go_signal_onset_time
+                break
+
+        while self.evm.before("trial_finished"):
+            _ = ui_request()
 
             # if this is a GBYK trial, and reach is ongoing, monitor velocity
-            if rt is not None and self.block_task == "GBYK":
-                velocity = self.__get_velocity()
+            if self.block_task == "GBYK":
+                velocity = self.check_velocity()
                 # present target once velocity threshold is met (and target is not already visible)
                 if (
                     velocity >= P.velocity_threshold  # type: ignore[unknown-attr]
                     and not gbyk_target_is_visible
                 ):
-                    self.__present_stimuli(target=True)
+                    self.present_stimuli(target=True)
                     gbyk_target_is_visible = True
 
         # cease recording upon trial completion
-        self.optitrack.shutdown()
+        self.nnc.shutdown()
 
         return {
             "block_num": P.block_number,
@@ -267,7 +277,7 @@ class GripApertureRedux(klibs.Experiment):
         pass
 
     # conditionally present stimuli
-    def __present_stimuli(self, prep=False, target=False, dev=False):
+    def present_stimuli(self, prep=False, target=False, dev=False):
         fill()
 
         if prep:
@@ -297,95 +307,11 @@ class GripApertureRedux(klibs.Experiment):
 
         flip()
 
-    def __get_velocity(self) -> float:
-        """Calculate instantaneous velocity from the last two frames of marker data.
+    def check_velocity(self):
+        pass
 
-        Returns:
-            float: Instantaneous velocity in units per second.
 
-        Raises:
-            ValueError: If required parameters are not defined in _params.
-
-        Notes:
-            Requires parameters 'set_name', 'set_len', and 'framerate' to be defined in P.
-        """
-        for p in ["set_name", "set_len", "framerate"]:
-            if not hasattr(P, p):
-                raise ValueError(
-                    f"P.{p} unavailable, did you forget to define it in _params.py?"
-                )
-
-        frames = self.__query_frames(n_frames=2)
-
-        demarkation_point = len(frames) // 2
-        prev_pos = self.__colwise_means(frames[0:demarkation_point])  # type: ignore[attr-defined]
-        curr_pos = self.__colwise_means(frames[demarkation_point:])  # type: ignore[attr-defined]
-
-        travel = self.__euclidean_distance(prev_pos, curr_pos)
-
-        return self.__derivate(delta=travel)
-
-    def __euclidean_distance(
-        self,
-        ref_pos: tuple[float, float, float],
-        curr_pos: tuple[float, float, float],
-    ):
-        """Calculate Euclidean distance between two 3D points.
-
-        Args:
-            ref_pos (tuple[float, float, float]): Reference position (x, y, z).
-            curr_pos (tuple[float, float, float]): Current position (x, y, z).
-
-        Returns:
-            float: Euclidean distance between the two points.
-        """
-        return sqrt(sum([(curr_pos[i] - ref_pos[i]) ** 2 for i in range(3)]))
-
-    def __colwise_means(
-        self, frames: tuple[tuple[float, float, float]]
-    ) -> tuple[float, float, float]:
-        """Calculate column-wise means for a series of 3D coordinates.
-
-        Args:
-            frames (tuple[tuple[float, float, float]]): Series of (x, y, z) coordinates.
-
-        Returns:
-            tuple[float, float, float]: Mean (x, y, z) coordinates.
-
-        Raises:
-            ValueError: If any frame does not contain exactly 3 coordinates.
-        """
-        if not all(len(frame) == 3 for frame in frames):
-            raise ValueError("Frames must be tuples containing xyz tuples.")
-
-        # stack coords by transposing frames, then average columns
-        col_means = tuple(sum(column) / len(frames) for column in zip(*frames))
-
-        # ensure that the result is a tuple of 3 floats
-        if len(col_means) != 3 or not all(
-            isinstance(mean, float) for mean in col_means
-        ):
-            raise ValueError(
-                "Expected to produce a tuple of 3 floats.\n"
-                + f"Actual result was: {col_means}"
-            )
-
-        else:
-            return col_means
-
-    def __derivate(self, delta: float, sampling_rate: int = P.framerate) -> float:  # type: ignore[attr-defined]
-        """Calculate time derivative of a value using supplied sampling rate.
-
-        Args:
-            delta (float): Value to be converted to rate of change.
-            sampling_rate (int, optional): Sampling rate (in Hz), defaults to P.framerate.
-
-        Returns:
-            float: Rate of change per second.
-        """
-        return delta / (1 / sampling_rate)
-
-    def __marker_set_listener(self, marker_set: dict) -> None:
+    def marker_set_listener(self, marker_set: dict) -> None:
         """Write marker set data to CSV file.
 
         Args:
@@ -402,6 +328,25 @@ class GripApertureRedux(klibs.Experiment):
 
             for marker in marker_set.get("markers", None):
                 writer.writerow(marker)
+
+    def legacy_markers_listener(self, markers: list) -> None:
+        """Write legacy marker data to CSV file.
+
+        Args:
+            markers (list): List of legacy marker data to be written.
+        """
+
+        pass
+
+
+    def rigid_bodies_listener(self, bodies: list) -> None:
+        """Write rigid body data to CSV file.
+
+        Args:
+            bodies (list): List of rigid body data to be written.
+        """
+
+        pass
 
     def __query_frames(self, n_frames: int = 5) -> list:
         """Read the last n_frames worth of marker data from CSV file.
@@ -422,7 +367,6 @@ class GripApertureRedux(klibs.Experiment):
             The expected value is computed assuming one row per marker contained in the set,
             times the number queried frames.
 
-            A more stable solution would be query number of tracked markers at runtime, and compare against expected count.
         """
 
         fname = f"{self.block_dir}/trial_{P.trial_number}_{P.set_name}_markers.csv"  # type: ignore[attr-defined]

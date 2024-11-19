@@ -18,7 +18,7 @@ import socket
 import struct
 import time
 from threading import Thread
-from typing import Any, Callable, Container, List, Tuple, Union
+from typing import Any, Callable, List, Tuple, Union
 
 from MotiveStreamParser import MotiveStreamParser
 
@@ -46,49 +46,6 @@ def trace_mf(*args):
 def get_message_id(bytestream: bytes) -> int:
     message_id = int.from_bytes(bytestream[0:2], byteorder='little')
     return message_id
-
-
-# Asset specific data structures for deserialization
-class Parser(object):
-    def __init__(self, data: bytes) -> None:
-        self.data = memoryview(data)
-        self.offset = 0
-
-        self._structs = {
-            'size': Int32ul,
-            'label': CString('utf8'),
-            'count': Int32ul,
-            'prefix': Struct('frame' / Int32ul),
-            'marker': Struct(
-                'pos_x' / Float32l, 'pos_y' / Float32l, 'pos_z' / Float32l
-            ),
-            'rigid_body': Struct(
-                'asset_ID' / Int32ul,
-                'pos_x' / Float32l,
-                'pos_y' / Float32l,
-                'pos_z' / Float32l,
-                'rot_w' / Float32l,
-                'rot_x' / Float32l,
-                'rot_y' / Float32l,
-                'rot_z' / Float32l,
-                'error' / Float32l,
-                'tracking_valid' / Int16sl,
-            ),
-        }
-
-    def seek_ahead(self, by: int = 0) -> None:
-        self.offset += by
-
-    def sizeof(self, asset_type: str, count: int = 1) -> int:
-        return self._structs[asset_type].sizeof() * count
-
-    def unpack(self, asset_type: str) -> Union[str, int, Container]:
-        struct = self._structs[asset_type]
-        unpacked = struct.parse(self.data[self.offset :])
-
-        self.seek_ahead(by=struct.sizeof())
-
-        return unpacked
 
 
 class NatNetClient:
