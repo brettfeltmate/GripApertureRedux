@@ -20,7 +20,7 @@ import time
 from threading import Thread
 from typing import Any, Callable, Container, List, Tuple, Union
 
-from construct import CString, Float32l, Int16sl, Int32ul, Struct
+from MotiveStreamParser import MotiveStreamParser
 
 
 def trace(*args):
@@ -165,43 +165,48 @@ class NatNetClient:
     def __unpack_data(
         self, stream: bytes, stream_version: List[int] = []
     ) -> int:
-        parser = Parser(data=stream)
-        prefix = parser.unpack('prefix')
+        parser = MotiveStreamParser(stream)
+        prefix = parser.parse('frame_number')
 
-        n_marker_sets = parser.unpack('count')
-        _ = parser.unpack('size')
+        n_marker_sets = parser.parse('count')
+        _ = parser.parse('size')
 
         # TODO: Pointer() might aide skipping
         for _ in range(0, n_marker_sets):
-            set_label = CString('utf8').parse(parser.data[parser.offset :])
-            parser.seek_ahead(len(set_label) + 1)
+            set_label = self.parser.parse('label')
 
             marker_set = {'label': set_label, 'markers': []}
 
-            n_markers_in_set = parser.unpack('count')
+            n_markers_in_set = parser.parse('count')
 
-            if self.markers_listener is not None:
-                for _ in range(n_markers_in_set):
-                    marker = parser.unpack('marker')
-                    marker['frame'] = prefix['frame']
-                    marker_set['markers'].append(marker)
+            for _ in range(n_markers_in_set):
+                marker = parser.parse('marker')
+                marker['frame'] = prefix['frame']
+                marker_set['markers'].append(marker)
 
-                self.markers_listener(marker_set)
+            self.markers_listener(marker_set)
 
-            else:
-                parser.seek_ahead(by=parser.sizeof('marker', n_markers_in_set))
+        n_legacy_markers = parser.parse('count')
+        _ = parser.parse('size')
 
-        n_rigid_bodies = parser.unpack('count')
-        _ = parser.unpack('size')
+        legacy_markers = []
+        for _ in range(n_legacy_markers):
+            legacy_marker = parser.parse('legacy_marker')
+            legacy_marker['frame'] = prefix['frame']
+            legacy_markers.append(legacy_marker)
 
-        if self.rigid_bodies_listener is not None:
+        self.legacy_markers_listener(legacy_markers)
 
-            for _ in range(n_rigid_bodies):
-                rigid_body = parser.unpack('rigid_body')
-                rigid_body['frame'] = prefix['frame']
-                self.rigid_bodies_listener(rigid_body)
-        else:
-            parser.seek_ahead(parser.sizeof('rigid_body', n_rigid_bodies))
+        n_rigid_bodies = parser.parse('count')
+        _ = parser.parse('size')
+
+        rigid_bodies = []
+        for _ in range(n_rigid_bodies):
+            rigid_body = parser.parse('rigid_body')
+            rigid_body['frame'] = prefix['frame']
+            rigid_bodies.append(rigid_body)
+
+        self.rigid_bodies_listener(rigid_bodies)
 
         return parser.offset
 
@@ -211,54 +216,6 @@ class NatNetClient:
     def __unpack_descriptions(
         self, bytestream: bytes, stream_version: List[int] = None
     ) -> int:
-        # self.descriptions = Descriptions()
-        #
-        # with open(f'descriptions_frame_{self.desc_num}.bin', 'wb') as f:
-        #     f.write(bytestream[offset:])
-        #
-        # # # of data sets to process
-        # dataset_count = int.from_bytes(
-        #     bytestream[offset : offset + 4], byteorder='little'
-        # )
-        # offset += 4
-        #
-        # unpack_functions = {
-        #     0: self.__unpack_marker_set_description,
-        #     1: self.__unpack_rigid_body_description,
-        #     2: self.__unpack_skeleton_description,
-        #     3: self.__unpack_force_plate_description,
-        #     4: self.__unpack_device_description,
-        #     5: self.__unpack_camera_description,
-        #     6: self.__unpack_asset_description,
-        # }
-        #
-        # for i in range(0, dataset_count):
-        #     data_type = int.from_bytes(
-        #         bytestream[offset : offset + 4], byteorder='little'
-        #     )
-        #     offset += 4
-        #
-        #     if data_type in unpack_functions:
-        #         offset += 4
-        #         offset += unpack_functions[data_type](
-        #             bytestream, offset, stream_version
-        #         )
-        #     else:
-        #         print(
-        #             f'NatNetClient.__unpack_descriptions | Decode Error; Supplied unknown asset type: {data_type}'
-        #         )
-        #
-        # description = self.descriptions.export(
-        #     (
-        #         asset_type
-        #         for asset_type in self.return_description.keys()
-        #         if self.return_description[asset_type]
-        #     )
-        # )
-        #
-        # self.description_listener(description)
-        #
-        # return offset
         pass
 
     # Private Utility functions #
