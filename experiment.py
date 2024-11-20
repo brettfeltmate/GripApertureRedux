@@ -21,7 +21,7 @@ from klibs.KLUserInterface import any_key, key_pressed, ui_request
 from klibs.KLUtilities import hide_mouse_cursor, pump
 from klibs.KLBoundary import CircleBoundary
 from natnetclient_rough import NatNetClient  # type: ignore[import]
-from Kinematics import Kinematics # type: ignore[import]
+from OptiTracker import OptiTracker # type: ignore[import]
 from pyfirmata import serial
 
 # experiment constants
@@ -70,15 +70,15 @@ class GripApertureRedux(klibs.Experiment):
                 + "\n\tThis value MUST MATCH the number of tracked markers"
             )
 
-        self.kine = Kinematics()
+        self.opti = OptiTracker()
 
         # setup optitrack client
-        self.nnc = NatNetClient()
+        self.client = NatNetClient()
 
         # pass marker set listener to client for callback
-        self.nnc.markers_listener = self.marker_set_listener
-        self.nnc.rigid_bodies_listener = self.rigid_bodies_listener
-        self.nnc.legacy_markers_listener = self.legacy_markers_listener
+        self.client.markers_listener = self.marker_set_listener
+        self.client.rigid_bodies_listener = self.rigid_bodies_listener
+        self.client.legacy_markers_listener = self.legacy_markers_listener
 
 
         # setup firmata board (plato goggle controller)
@@ -125,6 +125,8 @@ class GripApertureRedux(klibs.Experiment):
             os.mkdir(f"OptiData/{P.p_id}/practice")
 
     def block(self):
+
+        # TODO: assign correct data directory to self.opti
 
         # grab task for current block
         try:
@@ -192,7 +194,7 @@ class GripApertureRedux(klibs.Experiment):
                 break
 
         self.present_stimuli()  # reset display for trial start
-        self.nnc.startup()  # start marker tracking
+        self.client.startup()  # start marker tracking
 
     def trial(self):  # type: ignore[override]
         # ad-hoc control flags
@@ -245,7 +247,7 @@ class GripApertureRedux(klibs.Experiment):
 
             # if this is a GBYK trial, and reach is ongoing, monitor velocity
             if self.block_task == "GBYK":
-                velocity = self.check_velocity()
+                velocity = self.opti.velocity()
                 # present target once velocity threshold is met (and target is not already visible)
                 if (
                     velocity >= P.velocity_threshold  # type: ignore[unknown-attr]
@@ -255,7 +257,7 @@ class GripApertureRedux(klibs.Experiment):
                     gbyk_target_is_visible = True
 
         # cease recording upon trial completion
-        self.nnc.shutdown()
+        self.client.shutdown()
 
         return {
             "block_num": P.block_number,
@@ -307,9 +309,6 @@ class GripApertureRedux(klibs.Experiment):
 
         flip()
 
-    def check_velocity(self):
-        pass
-
 
     def marker_set_listener(self, marker_set: dict) -> None:
         """Write marker set data to CSV file.
@@ -348,57 +347,3 @@ class GripApertureRedux(klibs.Experiment):
 
         pass
 
-    def __query_frames(self, n_frames: int = 5) -> list:
-        """Read the last n_frames worth of marker data from CSV file.
-
-        Args:
-            n_frames (int, optional): Number of frames to query. Defaults to 2.
-
-        Returns:
-            list: List of frames, where each frame contains marker coordinates.
-
-        Raises:
-            FileNotFoundError: If marker data file does not exist.
-            ValueError: If insufficient data exists in the file.
-
-        Notes:
-            Expected rows counts need to be determed ad-hoc at runtime.
-
-            The expected value is computed assuming one row per marker contained in the set,
-            times the number queried frames.
-
-        """
-
-        fname = f"{self.block_dir}/trial_{P.trial_number}_{P.set_name}_markers.csv"  # type: ignore[attr-defined]
-
-        if not os.path.exists(fname):
-            raise FileNotFoundError(f"Marker data file not found at:\n{fname}!")
-
-        with open(fname, newline="") as csvfile:
-            reader = DictReader(csvfile)
-
-            rows = list(reader)
-
-            # Insufficient data means something is broken
-            if len(rows) < n_frames * P.set_len:  # type: ignore[attr-defined]
-                raise ValueError(
-                    "Insufficient data to query frames. "
-                    + f"Expected {n_frames * P.set_len} rows, got {len(rows)}."  # type: ignore[attr-defined]
-                )
-
-            frames = [[] for _ in range(n_frames)]
-
-            # Iterate through frames in reverse chronological order
-            #
-            # For each frame, extract markers from CSV rows using negative indexing
-            #
-            # Formula: -(frame * markers_per_set + current_marker) gets the right row
-            #
-            # Example: For 3 markers per set, 2 frames:
-            #   Frame 0, Marker 0: -0, Frame 0, Marker 1: -1, Frame 0, Marker 2: -2
-            #   Frame 1, Marker 0: -3, Frame 1, Marker 1: -4, Frame 1, Marker 2: -5
-            for frame in range(n_frames):
-                for marker in range(P.set_len):  # type: ignore[attr-defined]
-                    frames[frame].append(float(rows[-(frame * P.set_len + marker)]))  # type: ignore[attr-defined]
-
-        return frames
