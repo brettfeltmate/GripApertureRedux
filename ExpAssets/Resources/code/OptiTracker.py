@@ -1,6 +1,9 @@
 import os
 import numpy as np
 
+# TODO:
+#  - grab first frame, row count indicates num markers tracked.
+#  - incorporate checks to ensure frames queried match expected marker count
 
 class OptiTracker(object):
     """
