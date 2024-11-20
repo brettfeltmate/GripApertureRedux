@@ -22,6 +22,7 @@ class OptiTracker(object):
     Methods:
         velocity(): Calculate velocity based on marker positions
         position(): Get current position of markers
+        distance(num_frames: int): Calculate distance traveled over specified number of frames
     """
 
     def __init__(
@@ -78,18 +79,37 @@ class OptiTracker(object):
         """Set the window size."""
         self.__window_size = window_size
 
-    def velocity(self) -> float:
+    def velocity(self, num_frames: int = 0) -> float:
         """Calculate and return the current velocity."""
-        return self.__velocity()
+        if num_frames == 0:
+            num_frames = self.__window_size
+
+        if num_frames < 2:
+            raise ValueError("Window size must cover at least two frames.")
+
+        frames = self.__query_frames(num_frames)
+        return self.__velocity(frames)
 
     def position(self) -> np.ndarray:
         """Get the current position of markers."""
         frame = self.__query_frames(num_frames=1)
         return self.__column_means(frame)
 
-    def __velocity(self) -> float:
+    def distance(self, num_frames: int = 0) -> float:
+        """Calculate and return the distance traveled over the specified number of frames."""
+
+        if num_frames == 0:
+            num_frames = self.__window_size
+
+        frames = self.__query_frames(num_frames)
+        return self.__euclidean_distance(frames)
+
+    def __velocity(self, frames: np.ndarray = np.array([])) -> float:
         """
         Calculate velocity using position data over the specified window.
+
+        Args:
+            frames (np.ndarray): Array of frame data
 
         Returns:
             float: Calculated velocity in cm/s
@@ -97,7 +117,8 @@ class OptiTracker(object):
         if self.__window_size < 2:
             raise ValueError("Window size must cover at least two frames.")
 
-        frames = self.__query_frames()
+        if len(frames) == 0:
+            frames = self.__query_frames()
 
         positions = self.__column_means(frames)
 
