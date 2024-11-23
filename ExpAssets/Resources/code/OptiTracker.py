@@ -5,6 +5,7 @@ import numpy as np
 #  - grab first frame, row count indicates num markers tracked.
 #  - incorporate checks to ensure frames queried match expected marker count
 
+
 class OptiTracker(object):
     """
     A class for querying and operating on motion tracking data.
@@ -20,7 +21,7 @@ class OptiTracker(object):
         data_dir (str): Directory path containing the tracking data files
 
     Methods:
-        velocity(): Calculate velocity based on marker positions
+        velocity(num_frames): Calculate velocity based on marker positions across specified number of frames
         position(): Get current position of markers
         distance(num_frames: int): Calculate distance traveled over specified number of frames
     """
@@ -45,44 +46,54 @@ class OptiTracker(object):
         if marker_count:
             self.__marker_count = marker_count
 
-        self._sampling_rate = sample_rate
+        self._sample_rate = sample_rate
         self._data_dir = data_dir
         self._window_size = window_size
 
     @property
+    def marker_count(self) -> int:
+        """Get the number of markers to track."""
+        return self.__marker_count
+
+    @marker_count.setter
+    def marker_count(self, marker_count: int) -> None:
+        """Set the number of markers to track."""
+        self.__marker_count = marker_count
+
+    @property
     def data_dir(self) -> str:
         """Get the data directory path."""
-        return self.__data_dir
+        return self._data_dir
 
     @data_dir.setter
     def data_dir(self, data_dir: str) -> None:
         """Set the data directory path."""
-        self.__data_dir = data_dir
+        self._data_dir = data_dir
 
     @property
-    def sampling_rate(self) -> int:
+    def sample_rate(self) -> int:
         """Get the sampling rate."""
-        return self.__sampling_rate
+        return self._sample_rate
 
-    @sampling_rate.setter
-    def sampling_rate(self, sample_rate: int) -> None:
+    @sample_rate.setter
+    def sample_rate(self, sample_rate: int) -> None:
         """Set the sampling rate."""
-        self.__sampling_rate = sample_rate
+        self._sample_rate = sample_rate
 
     @property
     def window_size(self) -> int:
         """Get the window size."""
-        return self.__window_size
+        return self._window_size
 
     @window_size.setter
     def window_size(self, window_size: int) -> None:
         """Set the window size."""
-        self.__window_size = window_size
+        self._window_size = window_size
 
     def velocity(self, num_frames: int = 0) -> float:
         """Calculate and return the current velocity."""
         if num_frames == 0:
-            num_frames = self.__window_size
+            num_frames = self._window_size
 
         if num_frames < 2:
             raise ValueError("Window size must cover at least two frames.")
@@ -99,7 +110,7 @@ class OptiTracker(object):
         """Calculate and return the distance traveled over the specified number of frames."""
 
         if num_frames == 0:
-            num_frames = self.__window_size
+            num_frames = self._window_size
 
         frames = self.__query_frames(num_frames)
         return self.__euclidean_distance(frames)
@@ -109,12 +120,12 @@ class OptiTracker(object):
         Calculate velocity using position data over the specified window.
 
         Args:
-            frames (np.ndarray): Array of frame data
+            frames (np.ndarray, optional): Array of frame data; queries last window_size frames if empty.
 
         Returns:
             float: Calculated velocity in cm/s
         """
-        if self.__window_size < 2:
+        if self._window_size < 2:
             raise ValueError("Window size must cover at least two frames.")
 
         if len(frames) == 0:
@@ -124,7 +135,7 @@ class OptiTracker(object):
 
         euclidean_distance = self.__euclidean_distance(positions)
 
-        velocity = euclidean_distance / (self.__window_size / self.__sampling_rate)
+        velocity = euclidean_distance / (self._window_size / self._sample_rate)
 
         return float(velocity)
 
@@ -133,23 +144,29 @@ class OptiTracker(object):
         Calculate Euclidean distance between first and last frames.
 
         Args:
-            frames (np.ndarray, optional): Array of frame data; will query the last window_size frames if not provided.
+            frames (np.ndarray, optional): Array of frame data; queries last window_size frames if empty.
 
         Returns:
             float: Euclidean distance
         """
 
+        # TODO: test what happens when 3+ frames are passed
+
         if len(frames) == 0:
             frames = self.__query_frames()
 
-        return float(np.linalg.norm(frames[0] - frames[-1]))
+        x = frames["pos_x"]
+        y = frames["pos_y"]
+        z = frames["pos_z"]
+
+        return np.sqrt(np.sum(np.diff(x) ** 2, np.diff(y) ** 2, np.diff(z) ** 2))
 
     def __column_means(self, frames: np.ndarray = np.array([])) -> np.ndarray:
         """
         Calculate column means of position data.
 
         Args:
-            frames (np.ndarray, optional): Array of frame data; will query the last window_size frames if not provided.
+            frames (np.ndarray, optional): Array of frame data; queries last window_size frames if empty.
 
         Returns:
             np.ndarray: Array of mean positions
@@ -158,29 +175,29 @@ class OptiTracker(object):
         if len(frames) == 0:
             frames = self.__query_frames()
 
-        reshaped = frames.reshape(self.__marker_count, self.__window_size)
-
-        frames = np.array(
-            [], dtype=[("pos_x", "float"), ("pos_y", "float"), ("pos_z", "float")]
+        # Create output array with the correct dtype
+        means = np.zeros(
+            self.__marker_count,
+            dtype=[("pos_x", "float"), ("pos_y", "float"), ("pos_z", "float")],
         )
 
-        for frame in reshaped:
-            x_vals = frame["pos_x"]
-            y_vals = frame["pos_y"]
-            z_vals = frame["pos_z"]
+        # Group by marker (every nth row where n is marker_count)
+        for marker_idx in range(self.__marker_count):
+            marker_data = frames[marker_idx :: self.__marker_count]
 
-            np.append(
-                frames, np.array([np.mean(x_vals), np.mean(y_vals), np.mean(z_vals)])
-            )
+            # Calculate means for each coordinate
+            means[marker_idx]["pos_x"] = np.mean(marker_data["pos_x"])
+            means[marker_idx]["pos_y"] = np.mean(marker_data["pos_y"])
+            means[marker_idx]["pos_z"] = np.mean(marker_data["pos_z"])
 
-        return frames
+        return means
 
     def __query_frames(self, num_frames: int = 0) -> np.ndarray:
         """
         Query and process frame data from the data file.
 
         Args:
-            num_frames (int, optional): Number of frames to query. Will default to window_size if not provided.
+            num_frames (int, optional): Number of frames to query. Defaults to window_size when empty.
 
         Returns:
             np.ndarray: Array of queried frame data
@@ -189,13 +206,16 @@ class OptiTracker(object):
             ValueError: If data directory is not set or data format is invalid
             FileNotFoundError: If data directory does not exist
         """
-        if self.__data_dir == "":
+        if self._data_dir == "":
             raise ValueError("No data directory was set.")
 
-        if not os.path.exists(self.__data_dir):
-            raise FileNotFoundError(f"Data directory not found at:\n{self.__data_dir}")
+        if not os.path.exists(self._data_dir):
+            raise FileNotFoundError(f"Data directory not found at:\n{self._data_dir}")
 
-        with open(self.__data_dir, "r") as file:
+        if num_frames < 0:
+            raise ValueError("Number of frames cannot be negative.")
+
+        with open(self._data_dir, "r") as file:
             header = file.readline().strip().split(",")
 
         if any(col not in header for col in ["frame", "pos_x", "pos_y", "pos_z"]):
@@ -218,11 +238,11 @@ class OptiTracker(object):
 
         # read in data now that columns have been validated and typed
         data = np.genfromtxt(
-            self.__data_dir, delimiter=",", dtype=dtype_map, skip_header=1
+            self._data_dir, delimiter=",", dtype=dtype_map, skip_header=1
         )
 
         if num_frames == 0:
-            num_frames = self.__window_size
+            num_frames = self._window_size
 
         # Calculate which frames to include
         last_frame = data["frame"][-1]
