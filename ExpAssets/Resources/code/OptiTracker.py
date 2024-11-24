@@ -1,7 +1,5 @@
 import os
 import numpy as np
-from numpy.lib.recfunctions import drop_fields
-from rich.console import Console
 
 # TODO:
 #  - grab first frame, row count indicates num markers tracked.
@@ -152,7 +150,6 @@ class OptiTracker(object):
             frames = self.__query_frames()
 
         positions = self.__column_means(frames)
-        positions = drop_fields(positions, ["frame"])
 
         return float(
             np.sqrt(
@@ -172,11 +169,9 @@ class OptiTracker(object):
         Returns:
             np.ndarray: Array of mean positions
         """
-        console = Console()
         if len(frames) == 0:
             frames = self.__query_frames()
 
-        console.print(frames)
         # Create output array with the correct dtype
         means = np.zeros(
             len(frames) // self.__marker_count,
@@ -188,21 +183,13 @@ class OptiTracker(object):
             ],
         )
 
-        # console.print(means)
-
         # Group by marker (every nth row where n is marker_count)
         for frame in range(1, len(frames) // self.__marker_count + 1):
             frame_data = frames[frame,]
 
-            # Calculate means for each coordinate
-            # means[means["frame"] == frame-1]["pos_x"] = np.mean(frame_data["pos_x"])
-            # means[means["frame"] == frame-1]["pos_y"] = np.mean(frame_data["pos_y"])
-            # means[means["frame"] == frame-1]["pos_z"] = np.mean(frame_data["pos_z"])
             means[frame - 1]["pos_x"] = np.mean(frame_data["pos_x"])
             means[frame - 1]["pos_y"] = np.mean(frame_data["pos_y"])
             means[frame - 1]["pos_z"] = np.mean(frame_data["pos_z"])
-
-        # console.log(means)
 
         return means
 
@@ -220,8 +207,6 @@ class OptiTracker(object):
             ValueError: If data directory is not set or data format is invalid
             FileNotFoundError: If data directory does not exist
         """
-
-        console = Console()
 
         if self._data_dir == "":
             raise ValueError("No data directory was set.")
@@ -264,8 +249,6 @@ class OptiTracker(object):
         # Calculate which frames to include
         last_frame = data["frame"][-1]
         lookback = last_frame - num_frames
-
-        console.print("lookback: ", lookback)
 
         # Filter for relevant frames
         data = data[data["frame"] > lookback]
