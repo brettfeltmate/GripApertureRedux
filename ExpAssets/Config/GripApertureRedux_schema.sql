@@ -63,4 +63,5 @@ CREATE TABLE trials (
     go_signal_onset text not null,
     velocity text not null,
     response_time text not null,
+    object_grasped text not null,
 );
