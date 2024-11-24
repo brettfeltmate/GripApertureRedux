@@ -128,12 +128,7 @@ class GripApertureRedux(klibs.Experiment):
 
         # TODO: assign correct data directory to self.opti
 
-        # grab task for current block
-        try:
-            self.block_task = self.block_sequence[P.block_number]
-        # probably impossible, but just in case
-        except IndexError:
-            raise RuntimeError("Block number, somehow, exceeds expected block count.")
+        self.block_task = self.block_sequence[P.block_number]
 
         self.block_dir = f"OptiData/{P.p_id}"
         self.block_dir += "/practice" if P.practicing else "/testing"

@@ -10,21 +10,36 @@ def sample_data_file(tmp_path):
     data_content = dedent(
         """
         frame,pos_x,pos_y,pos_z
-        1,0.1,0.2,0.3
-        1,1.1,1.2,1.3
-        1,2.1,2.2,2.3
-        2,0.2,0.3,0.4
-        2,1.2,1.3,1.4
-        2,2.2,2.3,2.4
-        3,0.3,0.4,0.5
-        3,1.3,1.4,1.5
-        3,2.3,2.4,2.5
-        4,0.4,0.5,0.6
-        4,1.4,1.5,1.6
-        4,2.4,2.5,2.6
-        5,0.5,0.6,0.7
-        5,1.5,1.6,1.7
-        5,2.5,2.6,2.7
+        1,0.0,0.0,0.0
+        1,1.0,1.0,1.0
+        1,2.0,2.0,2.0
+        2,1.0,1.0,1.0
+        2,2.0,2.0,2.0
+        2,3.0,3.0,3.0
+        3,2.0,2.0,2.0
+        3,3.0,3.0,3.0
+        3,4.0,4.0,4.0
+        4,3.0,3.0,3.0
+        4,4.0,4.0,4.0
+        4,5.0,5.0,5.0
+        5,4.0,4.0,4.0
+        5,5.0,5.0,5.0
+        5,6.0,6.0,6.0
+        6,5.0,5.0,5.0
+        6,6.0,6.0,6.0
+        6,7.0,7.0,7.0
+        7,6.0,6.0,6.0
+        7,7.0,7.0,7.0
+        7,8.0,8.0,8.0
+        8,7.0,7.0,7.0
+        8,8.0,8.0,8.0
+        8,9.0,9.0,9.0
+        9,8.0,8.0,8.0
+        9,9.0,9.0,9.0
+        9,10.0,10.0,10.0
+        10,9.0,9.0,9.0
+        10,10.0,10.0,10.0
+        10,11.0,11.0,11.0
         """
     ).strip()
     data_file = tmp_path / "test_data.csv"
@@ -34,7 +49,7 @@ def sample_data_file(tmp_path):
 
 @pytest.fixture
 def tracker(sample_data_file):
-    tracker = OptiTracker(marker_count=3, sample_rate=120, window_size=3)
+    tracker = OptiTracker(marker_count=3, sample_rate=120, window_size=5)
     tracker.data_dir = sample_data_file
     return tracker
 
@@ -75,7 +90,10 @@ def test_nonexistent_data_dir():
 def test_position(tracker):
     position = tracker.position()
     assert isinstance(position, np.ndarray)
-    assert position.dtype.names == ("pos_x", "pos_y", "pos_z")
+    assert position.dtype.names == ("frame", "pos_x", "pos_y", "pos_z")
+    assert position["pos_x"].item() == 10.0
+    assert position["pos_y"].item() == 10.0
+    assert position["pos_z"].item() == 10.0
 
 
 def test_velocity_invalid_window():
@@ -85,15 +103,23 @@ def test_velocity_invalid_window():
 
 
 def test_velocity(tracker):
+    velocity = tracker.velocity(num_frames=2)
+    assert isinstance(velocity, float)
+    assert velocity == (np.sqrt(3) / (1 / 120))
+
     velocity = tracker.velocity()
     assert isinstance(velocity, float)
-    assert velocity >= 0
+    assert velocity == (np.sqrt(12) / (1 / 120))
 
 
 def test_distance(tracker):
+    distance = tracker.distance(num_frames=2)
+    assert isinstance(distance, float)
+    assert distance == np.sqrt(3)
+
     distance = tracker.distance()
     assert isinstance(distance, float)
-    assert distance >= 0
+    assert distance == np.sqrt(12)
 
 
 def test_invalid_data_format(tmp_path):

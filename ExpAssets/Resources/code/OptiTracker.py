@@ -1,5 +1,7 @@
 import os
 import numpy as np
+from numpy.lib.recfunctions import drop_fields
+from rich.console import Console
 
 # TODO:
 #  - grab first frame, row count indicates num markers tracked.
@@ -131,13 +133,9 @@ class OptiTracker(object):
         if len(frames) == 0:
             frames = self.__query_frames()
 
-        positions = self.__column_means(frames)
+        euclidean_distance = self.__euclidean_distance(frames)
 
-        euclidean_distance = self.__euclidean_distance(positions)
-
-        velocity = euclidean_distance / (self._window_size / self._sample_rate)
-
-        return float(velocity)
+        return euclidean_distance / (1 / self._sample_rate)
 
     def __euclidean_distance(self, frames: np.ndarray = np.array([])) -> float:
         """
@@ -150,16 +148,19 @@ class OptiTracker(object):
             float: Euclidean distance
         """
 
-        # TODO: test what happens when 3+ frames are passed
-
-        if len(frames) == 0:
+        if frames.size == 0:
             frames = self.__query_frames()
 
-        x = frames["pos_x"]
-        y = frames["pos_y"]
-        z = frames["pos_z"]
+        positions = self.__column_means(frames)
+        positions = drop_fields(positions, ["frame"])
 
-        return np.sqrt(np.sum(np.diff(x) ** 2, np.diff(y) ** 2, np.diff(z) ** 2))
+        return float(
+            np.sqrt(
+                (positions["pos_x"][-1] - positions["pos_x"][0]) ** 2
+                + (positions["pos_y"][-1] - positions["pos_y"][0]) ** 2
+                + (positions["pos_z"][-1] - positions["pos_z"][0]) ** 2
+            )
+        )
 
     def __column_means(self, frames: np.ndarray = np.array([])) -> np.ndarray:
         """
@@ -171,24 +172,37 @@ class OptiTracker(object):
         Returns:
             np.ndarray: Array of mean positions
         """
-
+        console = Console()
         if len(frames) == 0:
             frames = self.__query_frames()
 
+        console.print(frames)
         # Create output array with the correct dtype
         means = np.zeros(
-            self.__marker_count,
-            dtype=[("pos_x", "float"), ("pos_y", "float"), ("pos_z", "float")],
+            len(frames) // self.__marker_count,
+            dtype=[
+                ("frame", "i8"),
+                ("pos_x", "f8"),
+                ("pos_y", "f8"),
+                ("pos_z", "f8"),
+            ],
         )
 
+        # console.print(means)
+
         # Group by marker (every nth row where n is marker_count)
-        for marker_idx in range(self.__marker_count):
-            marker_data = frames[marker_idx :: self.__marker_count]
+        for frame in range(1, len(frames) // self.__marker_count + 1):
+            frame_data = frames[frame,]
 
             # Calculate means for each coordinate
-            means[marker_idx]["pos_x"] = np.mean(marker_data["pos_x"])
-            means[marker_idx]["pos_y"] = np.mean(marker_data["pos_y"])
-            means[marker_idx]["pos_z"] = np.mean(marker_data["pos_z"])
+            # means[means["frame"] == frame-1]["pos_x"] = np.mean(frame_data["pos_x"])
+            # means[means["frame"] == frame-1]["pos_y"] = np.mean(frame_data["pos_y"])
+            # means[means["frame"] == frame-1]["pos_z"] = np.mean(frame_data["pos_z"])
+            means[frame - 1]["pos_x"] = np.mean(frame_data["pos_x"])
+            means[frame - 1]["pos_y"] = np.mean(frame_data["pos_y"])
+            means[frame - 1]["pos_z"] = np.mean(frame_data["pos_z"])
+
+        # console.log(means)
 
         return means
 
@@ -206,6 +220,9 @@ class OptiTracker(object):
             ValueError: If data directory is not set or data format is invalid
             FileNotFoundError: If data directory does not exist
         """
+
+        console = Console()
+
         if self._data_dir == "":
             raise ValueError("No data directory was set.")
 
@@ -248,12 +265,9 @@ class OptiTracker(object):
         last_frame = data["frame"][-1]
         lookback = last_frame - num_frames
 
+        console.print("lookback: ", lookback)
+
         # Filter for relevant frames
-        filtered_data = data[data["frame"] >= lookback]
+        data = data[data["frame"] > lookback]
 
-        # Convert to centimeters
-        coord_data = filtered_data.copy()
-        for field in ["pos_x", "pos_y", "pos_z"]:
-            coord_data[field] = coord_data[field] * 100.0
-
-        return coord_data[["pos_x", "pos_y", "pos_z"]]
+        return data
