@@ -40,7 +40,6 @@ error if, for example, it tries to assign a string to a column you know is alway
 to be an integer.
 
 */
-
 CREATE TABLE participants (
     id integer primary key autoincrement not null,
     userhash text not null,
@@ -61,7 +60,10 @@ CREATE TABLE trials (
     target_size text not null,
     distractor_size text not null,
     go_signal_onset text not null,
-    velocity text not null,
+    distance_threshold text not null,
+    target_onset text not null,
     response_time text not null,
+    movement_time text not null,
     object_grasped text not null,
 );
+

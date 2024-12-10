@@ -8,7 +8,7 @@ manual_demographics_collection = False
 manual_trial_generation = False
 run_practice_blocks = True
 multi_user = False
-view_distance = 57 # in centimeters, 57cm = 1 deg of visual angle per cm of screen
+view_distance = 57  # in centimeters, 57cm = 1 deg of visual angle per cm of screen
 allow_hidpi = True
 
 #########################################
@@ -23,8 +23,8 @@ eye_tracking = False
 default_fill_color = (45, 45, 45, 255)
 default_color = (255, 255, 255, 255)
 default_font_size = 23
-default_font_unit = 'px'
-default_font_name = 'Hind-Medium'
+default_font_unit = "px"
+default_font_name = "Hind-Medium"
 
 #########################################
 # EyeLink Settings
@@ -40,8 +40,8 @@ saccadic_motion_threshold = 0.15
 # Experiment Structure
 #########################################
 multi_session_project = False
-trials_per_block = 0
-blocks_per_experiment = 1
+trials_per_block = 60
+blocks_per_experiment = 2
 conditions = []
 default_condition = None
 
@@ -66,10 +66,5 @@ append_hostname = False
 #########################################
 # PROJECT-SPECIFIC VARS
 #########################################
-expected_marker_count = None
 task_order = ["GBYK", "KBYG"]
-framerate = 120  # in Hz
-set_name = None
-set_len = None
-velocity_threshold = 0.5  # in meters/sec
 trials_per_practice_block = 8
