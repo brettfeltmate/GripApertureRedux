@@ -71,8 +71,7 @@ class GripApertureRedux(klibs.Experiment):
         # setup optitracker
         self.ot = OptiTracker(marker_count=12, sample_rate=120, window_size=2)
 
-        # setup optitrack client
-
+        # setup motive client
         self.nnc = NatNetClient()
 
         # pass marker set listener to client for callback
