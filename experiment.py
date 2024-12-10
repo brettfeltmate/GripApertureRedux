@@ -129,6 +129,7 @@ class GripApertureRedux(klibs.Experiment):
 
         self.block_dir = f"OptiData/{P.p_id}"
         self.block_dir += "/practice" if P.practicing else "/testing"
+        self.block_dir += f"/{self.block_task}"
 
         if os.path.exists(self.block_dir):
             raise RuntimeError(f"Data directory already exists at {self.block_dir}")
@@ -190,17 +191,24 @@ class GripApertureRedux(klibs.Experiment):
                 break
 
         self.present_stimuli()  # reset display for trial start
-        self.nnc.startup()  # start marker tracking
 
     def trial(self):  # type: ignore[override]
-        # control flags
-        rt = None
-        mt = None
-        target_onset_time = "NA"
-        target_visible = False
-        object_grasped = None
 
         hide_mouse_cursor()
+
+        # control flags
+        self.rt = None
+        self.mt = None
+        self.target_onset_time = "NA"
+        self.target_visible = False
+        self.object_grasped = None
+
+        self.nnc.startup()  # start marker tracking
+
+        # NOTE: To ensure that file exists before OptiTracker tries to access it.
+        nnc_lead_time = CountDown(0.05)
+        while nnc_lead_time.counting():
+            _ = ui_request()
 
         start_pos = self.ot.position()
         start_pos = (start_pos[0], start_pos[2])
@@ -208,7 +216,7 @@ class GripApertureRedux(klibs.Experiment):
         # immediately present trials in KBYG trials
         if self.block_task == "KBYG":
             self.present_stimuli(target=True)
-            target_visible = True
+            self.target_visible = True
 
         # restrict movement until go signal received
         while self.evm.before("go_signal"):
@@ -237,10 +245,10 @@ class GripApertureRedux(klibs.Experiment):
             _ = ui_request()
 
             # key release indicates reach is in motion
-            if rt is None:
+            if self.rt is None:
                 if get_key_state("space") == 0:
                     # recorde time from go signal to reach onset
-                    rt = self.evm.trial_time_ms - go_signal_onset_time
+                    self.rt = self.evm.trial_time_ms - go_signal_onset_time
 
             # Whilst reach in motion
             else:
@@ -250,25 +258,25 @@ class GripApertureRedux(klibs.Experiment):
 
                 # Present target once reach exceeds threshold
                 # NOTE: only relevant for GBYK trials, will already be True during KBYG trials
-                if not target_visible:
+                if not self.target_visible:
                     if line_segment_len(start_pos, curr_pos) > self.reach_threshold:
                         self.present_stimuli(target=True)
-                        target_visible = True
+                        self.target_visible = True
                         # note time at which target was presented
-                        target_onset_time = self.evm.trial_time_ms
+                        self.target_onset_time = self.evm.trial_time_ms
 
                 # log if & which object has been grasped
-                elif object_grasped is None:
-                    object_grasped = self.bounds.which_boundary(curr_pos)
+                elif self.object_grasped is None:
+                    self.object_grasped = self.bounds.which_boundary(curr_pos)
 
                 # log time to taken to complete reach
                 else:
                     # NOTE: relative to rt/go-signal onset
-                    mt = self.evm.trial_time_ms - rt
+                    self.mt = self.evm.trial_time_ms - self.rt
                     break
 
         # if reach window closes before object is grasped, trial is aborted
-        if object_grasped is None:
+        if self.object_grasped is None:
             self.nnc.shutdown()
 
             # admonish participant
@@ -293,7 +301,7 @@ class GripApertureRedux(klibs.Experiment):
         while self.evm.before("trial_finished"):
             _ = ui_request()
 
-        # cease recording upon trial completion
+        # TODO: ask Anne & Kevin whether post-grasp data is worth recording
         self.nnc.shutdown()
 
         return {
@@ -308,10 +316,10 @@ class GripApertureRedux(klibs.Experiment):
             "distance_threshold": (
                 self.reach_threshold if self.block_task == "GBYK" else "NA"
             ),
-            "target_onset": target_onset_time,
-            "response_time": rt,
-            "movement_time": mt,
-            "object_grasped": object_grasped,
+            "target_onset": self.target_onset_time,
+            "response_time": self.rt,
+            "movement_time": self.mt,
+            "object_grasped": self.object_grasped,
         }
 
     def trial_clean_up(self):
@@ -357,16 +365,19 @@ class GripApertureRedux(klibs.Experiment):
             # Append data to trial-specific CSV file
             fname = self.ot.data_dir
 
+            # Timestamp marker data with relative trial time
+            header = list(marker_set["markers"][0].keys())
+            header.append("trial_time")
+
             if not os.path.exists(fname):
                 with open(fname, "w", newline="") as file:
-                    writer = DictWriter(
-                        file, fieldnames=marker_set["markers"][0].keys()
-                    )
+                    writer = DictWriter(file, fieldnames=header)
                     writer.writeheader()
 
             with open(fname, "a", newline="") as file:
-                writer = DictWriter(file, fieldnames=marker_set["markers"][0].keys())
+                writer = DictWriter(file, fieldnames=header)
 
                 for marker in marker_set.get("markers", None):
                     if marker is not None:
+                        marker["trial_time"] = self.evm.trial_time_ms
                         writer.writerow(marker)
