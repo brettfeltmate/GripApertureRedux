@@ -122,8 +122,6 @@ class GripApertureRedux(klibs.Experiment):
 
     def block(self):
 
-        # TODO: assign correct data directory to self.opti
-
         self.block_task = self.block_sequence[P.block_number]
 
         self.block_dir = f"OptiData/{P.p_id}"
@@ -135,6 +133,7 @@ class GripApertureRedux(klibs.Experiment):
         else:
             os.mkdir(self.block_dir)
 
+        # TODO: Proper instructions
         instrux = (
             f"Task: {self.block_task}\n"
             + f"Block: {P.block_number} of {P.blocks_per_experiment}\n"
@@ -368,11 +367,13 @@ class GripApertureRedux(klibs.Experiment):
             header = list(marker_set["markers"][0].keys())
             header.append("trial_time")
 
+            # if file doesn't exist, create it and write header
             if not os.path.exists(fname):
                 with open(fname, "w", newline="") as file:
                     writer = DictWriter(file, fieldnames=header)
                     writer.writeheader()
 
+            # append marker data to file
             with open(fname, "a", newline="") as file:
                 writer = DictWriter(file, fieldnames=header)
 
