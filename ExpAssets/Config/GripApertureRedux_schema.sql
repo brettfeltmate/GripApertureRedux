@@ -64,6 +64,6 @@ CREATE TABLE trials (
     target_onset text not null,
     response_time text not null,
     movement_time text not null,
-    object_grasped text not null,
+    object_grasped text not null
 );
 
