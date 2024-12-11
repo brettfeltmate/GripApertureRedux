@@ -66,5 +66,5 @@ append_hostname = False
 #########################################
 # PROJECT-SPECIFIC VARS
 #########################################
-task_order = ["KBYG","GBYK"]
+task_order = ["GBYK", "KBYG"]
 trials_per_practice_block = 8

@@ -30,10 +30,10 @@ from pyfirmata import serial
 # experiment constants
 
 # timings
-GO_SIGNAL_ONSET = (500, 600)
+GO_SIGNAL_ONSET = (500, 2000)
 # TODO: Make this relative to rt
-REACH_WINDOW_POST_GO_SIGNAL = 2000
-TRIAL_DURATION = 5000
+REACH_WINDOW_POST_GO_SIGNAL = 850
+POST_REACH_WINDOW = 1000
 REACH_DISTANCE_THRESHOLD = (100, 200)
 
 # audio
@@ -71,7 +71,7 @@ class GripApertureRedux(klibs.Experiment):
         BRIMWIDTH = 1 * PX_PER_CM
         POS_OFFSET = 6 * PX_PER_CM
         # setup optitracker
-        self.ot = OptiTracker(marker_count=3, sample_rate=120, window_size=5)
+        self.ot = OptiTracker(marker_count=10, sample_rate=120, window_size=5)
 
         # setup motive client
         self.nnc = NatNetClient()
@@ -110,7 +110,7 @@ class GripApertureRedux(klibs.Experiment):
 
         # generate block sequence
         if P.run_practice_blocks:
-            self.block_sequence = [task for task in P.task_order for _ in range(2)]  # type: ignore[attr-defined]
+            self.block_sequence = [GBYK, GBYK, KBYG, KBYG]  # type: ignore[attr-defined]
             self.insert_practice_block(
                 block_nums=[1, 3], trial_counts=P.trials_per_practice_block  # type: ignore[attr-defined]
             )
@@ -129,7 +129,7 @@ class GripApertureRedux(klibs.Experiment):
 
     def block(self):
 
-        self.block_task = self.block_sequence[P.block_number]
+        self.block_task = self.block_sequence.pop(0)
 
         self.block_dir = f"OptiData/{P.p_id}"
         self.block_dir += "/practice" if P.practicing else "/testing"
@@ -166,7 +166,7 @@ class GripApertureRedux(klibs.Experiment):
             onset=REACH_WINDOW_POST_GO_SIGNAL,
             after="go_signal",
         )
-        self.evm.add_event(label="trial_timeout", onset=TRIAL_DURATION)
+        self.evm.add_event(label="trial_timeout", onset=POST_REACH_WINDOW, after="reach_window_closed")
 
         # determine targ/dist locations
         self.distractor_loc = LEFT if self.target_loc == RIGHT else RIGHT  # type: ignore[attr-defined]
@@ -205,6 +205,8 @@ class GripApertureRedux(klibs.Experiment):
             _ = ui_request()
 
     def trial(self):  # type: ignore[override]
+        print("Expected marker count:")
+        print(self.ot.marker_count)
 
         hide_mouse_cursor()
 
@@ -295,6 +297,7 @@ class GripApertureRedux(klibs.Experiment):
                 else:
                     print("Object grasped is:")
                     print(self.object_grasped)
+                    self.nnc.shutdown()
                     # NOTE: relative to rt/go-signal onset
                     self.mt = self.evm.trial_time_ms - self.rt
                     break
@@ -402,8 +405,11 @@ class GripApertureRedux(klibs.Experiment):
             # append marker data to file
             with open(fname, "a", newline="") as file:
                 writer = DictWriter(file, fieldnames=header)
-
+                i = 0
                 for marker in marker_set.get("markers", None):
-                    if marker is not None:
-                        # marker["trial_time"] = self.evm.trial_time_ms
-                        writer.writerow(marker)
+                    if i < self.ot.marker_count:
+                    # pprint(marker)
+                        if marker is not None:
+                    # marker["trial_time"] = self.evm.trial_time_ms
+                            writer.writerow(marker)
+                            i += 1

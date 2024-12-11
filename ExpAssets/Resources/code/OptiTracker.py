@@ -261,8 +261,8 @@ class OptiTracker(object):
         if len(frames) == 0:
             frames = self.__query_frames()
 
-        print("OptiTracker column_means, got frames:")
-        pprint(frames)
+        # print("OptiTracker column_means, got frames:")
+        # pprint(frames)
 
         # Create output array with the correct dtype
         means = np.zeros(
@@ -282,8 +282,8 @@ class OptiTracker(object):
         for frame_number in range(start, stop):
             this_frame = frames[frames["frame_number"] == frame_number,]
 
-            print("OptiTracker column_means, this frame:")
-            pprint(this_frame)
+            # print("OptiTracker column_means, this frame:")
+            # pprint(this_frame)
 
             # if not len(frame):
             #     tmp = frame_number - 1
