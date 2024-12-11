@@ -9,7 +9,7 @@ manual_trial_generation = False
 run_practice_blocks = True
 multi_user = False
 view_distance = 57  # in centimeters, 57cm = 1 deg of visual angle per cm of screen
-allow_hidpi = True
+allow_hidpi = False
 
 #########################################
 # Available Hardware
@@ -66,5 +66,5 @@ append_hostname = False
 #########################################
 # PROJECT-SPECIFIC VARS
 #########################################
-task_order = ["GBYK", "KBYG"]
+task_order = ["KBYG","GBYK"]
 trials_per_practice_block = 8

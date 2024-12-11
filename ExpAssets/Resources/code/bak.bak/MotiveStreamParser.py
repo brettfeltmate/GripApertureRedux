@@ -14,7 +14,7 @@ class MotiveStreamParser(object):
             "size": Int32ul,
             "count": Int32ul,
             "frame_number": Int32ul,
-            "marker": unlabeledMarkerStruct,
+            "unlabeled_marker": unlabeledMarkerStruct,
             "legacy_marker": unlabeledMarkerStruct,
             "labeled_marker": labeledMarkerStruct,
             "rigid_body": rigidBodyStruct,

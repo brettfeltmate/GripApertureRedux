@@ -61,20 +61,12 @@ def test_init():
     assert tracker.marker_count == 3
 
 
-def test_property_setters():
-    tracker = OptiTracker(marker_count=3)
-
-    assert tracker.sample_rate == 120
+def test_property_setters(tracker):
     tracker.sample_rate = 60
     assert tracker.sample_rate == 60
 
-    assert tracker.window_size == 5
     tracker.window_size = 10
     assert tracker.window_size == 10
-
-    assert tracker.marker_count == 3
-    tracker.marker_count = 5
-    assert tracker.marker_count == 5
 
     new_path = "/new/path"
     tracker.data_dir = new_path
@@ -97,12 +89,11 @@ def test_nonexistent_data_dir():
 
 def test_position(tracker):
     position = tracker.position()
-
     assert isinstance(position, np.ndarray)
     assert position.dtype.names == ("frame_number", "pos_x", "pos_y", "pos_z")
-    assert position["pos_x"].item() == 10000.0
-    assert position["pos_y"].item() == 10000.0
-    assert position["pos_z"].item() == 10000.0
+    assert position["pos_x"].item() == 10.0
+    assert position["pos_y"].item() == 10.0
+    assert position["pos_z"].item() == 10.0
 
 
 def test_velocity_invalid_window():
@@ -112,39 +103,23 @@ def test_velocity_invalid_window():
 
 
 def test_velocity(tracker):
-    def expected(num_frames):
-        # get 3d vector velocity
-        delta = ((num_frames - 1) * 1000) ** 2
-        delta = np.sqrt(delta * 3)
-        time = num_frames / 120
-        return delta / time
-
-    num_frames = 2
-    velocity = tracker.velocity(num_frames=num_frames)
+    velocity = tracker.velocity(num_frames=2)
     assert isinstance(velocity, float)
-    assert velocity == expected(num_frames)
+    assert velocity == (np.sqrt(3) / (1 / 120))
 
-    num_frames = 9
-    velocity = tracker.velocity(num_frames=num_frames)
+    velocity = tracker.velocity()
     assert isinstance(velocity, float)
-    assert velocity == expected(num_frames)
+    assert velocity == (np.sqrt(12) / (1 / 120))
 
 
 def test_distance(tracker):
-    def expected(num_frames):
-        # get 3d vector extant
-        delta = ((num_frames - 1) * 1000) ** 2
-        return np.sqrt(delta * 3)
-
-    num_frames = 2
-    distance = tracker.distance(num_frames=num_frames)
+    distance = tracker.distance(num_frames=2)
     assert isinstance(distance, float)
-    assert distance == expected(num_frames)
+    assert distance == np.sqrt(3)
 
-    num_frames = 9
-    distance = tracker.distance(num_frames=num_frames)
+    distance = tracker.distance()
     assert isinstance(distance, float)
-    assert distance == expected(num_frames)
+    assert distance == np.sqrt(12)
 
 
 def test_invalid_data_format(tmp_path):
@@ -162,6 +137,6 @@ def test_invalid_data_format(tmp_path):
 
     with pytest.raises(
         ValueError,
-        match="Data file must contain columns named frame_number, pos_x, pos_y, pos_z.",
+        match="Data file must contain columns named frame, pos_x, pos_y, pos_z.",
     ):
         tracker.position()

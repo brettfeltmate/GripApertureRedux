@@ -123,11 +123,11 @@ class NatNetClient:
     def __unpack_data(
         self, stream: bytes, stream_version: List[int] = []
     ) -> int:
-        parser = MotiveStreamParser(stream)
-        prefix = parser.parse('frame_number')
+        self.parser = MotiveStreamParser(stream)
+        prefix = self.parser.parse('frame_number')
 
-        n_marker_sets = parser.parse('count')
-        _ = parser.parse('size')
+        n_marker_sets = self.parser.parse('count')
+        _ = self.parser.parse('size')
 
         # TODO: Pointer() might aide skipping
         for _ in range(0, n_marker_sets):
@@ -135,38 +135,38 @@ class NatNetClient:
 
             marker_set = {'label': set_label, 'markers': []}
 
-            n_markers_in_set = parser.parse('count')
+            n_markers_in_set = self.parser.parse('count')
 
             for _ in range(n_markers_in_set):
-                marker = parser.parse('marker')
-                marker['frame'] = prefix['frame']
+                marker = self.parser.parse('marker')
+                marker['frame_number'] = prefix['frame_number']
                 marker_set['markers'].append(marker)
 
             self.markers_listener(marker_set)
 
-        n_legacy_markers = parser.parse('count')
-        _ = parser.parse('size')
+        # n_legacy_markers = self.parser.parse('count')
+        # _ = self.parser.parse('size')
+        #
+        # legacy_markers = []
+        # for _ in range(n_legacy_markers):
+        #     legacy_marker = self.parser.parse('legacy_marker')
+        #     legacy_marker['frame_number'] = prefix['frame_number']
+        #     legacy_markers.append(legacy_marker)
+        #
+        # self.legacy_markers_listener(legacy_markers)
+        #
+        # n_rigid_bodies = self.parser.parse('count')
+        # _ = self.parser.parse('size')
+        #
+        # rigid_bodies = []
+        # for _ in range(n_rigid_bodies):
+        #     rigid_body = self.parser.parse('rigid_body')
+        #     rigid_body['frame_number'] = prefix['frame_number']
+        #     rigid_bodies.append(rigid_body)
+        #
+        # self.rigid_bodies_listener(rigid_bodies)
 
-        legacy_markers = []
-        for _ in range(n_legacy_markers):
-            legacy_marker = parser.parse('legacy_marker')
-            legacy_marker['frame'] = prefix['frame']
-            legacy_markers.append(legacy_marker)
-
-        self.legacy_markers_listener(legacy_markers)
-
-        n_rigid_bodies = parser.parse('count')
-        _ = parser.parse('size')
-
-        rigid_bodies = []
-        for _ in range(n_rigid_bodies):
-            rigid_body = parser.parse('rigid_body')
-            rigid_body['frame'] = prefix['frame']
-            rigid_bodies.append(rigid_body)
-
-        self.rigid_bodies_listener(rigid_bodies)
-
-        return parser.offset
+        return self.parser.offset
 
     # Functions for unpacking descriptions, called by __unpack_descriptions #
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #

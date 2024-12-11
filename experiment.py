@@ -6,6 +6,7 @@ __author__ = "Brett Feltmate"
 import os
 from csv import DictWriter
 from random import randrange
+from pprint import pprint
 
 # local imports
 from get_key_state import get_key_state  # type: ignore[import]
@@ -29,9 +30,9 @@ from pyfirmata import serial
 # experiment constants
 
 # timings
-GO_SIGNAL_ONSET = (500, 2000)
+GO_SIGNAL_ONSET = (500, 600)
 # TODO: Make this relative to rt
-REACH_WINDOW_POST_GO_SIGNAL = 800
+REACH_WINDOW_POST_GO_SIGNAL = 2000
 TRIAL_DURATION = 5000
 REACH_DISTANCE_THRESHOLD = (100, 200)
 
@@ -70,7 +71,7 @@ class GripApertureRedux(klibs.Experiment):
         BRIMWIDTH = 1 * PX_PER_CM
         POS_OFFSET = 6 * PX_PER_CM
         # setup optitracker
-        self.ot = OptiTracker(marker_count=12, sample_rate=120, window_size=2)
+        self.ot = OptiTracker(marker_count=3, sample_rate=120, window_size=5)
 
         # setup motive client
         self.nnc = NatNetClient()
@@ -174,13 +175,13 @@ class GripApertureRedux(klibs.Experiment):
         self.target_boundary = CircleBoundary(
             label="target",
             center=self.locs[self.target_loc],  # type: ignore[attr-defined]
-            radius=self.sizes[self.target_size] * 0.75,  # type: ignore[attr-defined]
+            radius=self.sizes[self.target_size],  # type: ignore[attr-defined]
         )
 
         self.distractor_boundary = CircleBoundary(
             label="distractor",
             center=self.locs[self.distractor_loc],  # type: ignore[attr-defined]
-            radius=self.sizes[self.distractor_size] * 0.75,  # type: ignore[attr-defined]
+            radius=self.sizes[self.distractor_size],  # type: ignore[attr-defined]
         )
 
         self.bounds = BoundarySet([self.target_boundary, self.distractor_boundary])
@@ -196,6 +197,13 @@ class GripApertureRedux(klibs.Experiment):
 
         self.present_stimuli()  # reset display for trial start
 
+        self.nnc.startup()  # start marker tracking
+
+        # NOTE: To ensure that file exists before OptiTracker tries to access it.
+        nnc_lead_time = CountDown(0.5)
+        while nnc_lead_time.counting():
+            _ = ui_request()
+
     def trial(self):  # type: ignore[override]
 
         hide_mouse_cursor()
@@ -207,15 +215,19 @@ class GripApertureRedux(klibs.Experiment):
         self.target_visible = False
         self.object_grasped = None
 
-        self.nnc.startup()  # start marker tracking
-
-        # NOTE: To ensure that file exists before OptiTracker tries to access it.
-        nnc_lead_time = CountDown(0.05)
-        while nnc_lead_time.counting():
-            _ = ui_request()
 
         start_pos = self.ot.position()
-        start_pos = (start_pos[0], start_pos[2])
+        print("start_pos (raw from opti)")
+        print(start_pos)
+        print("start_pos (munged)")
+        start_pos = (start_pos["pos_x"][0].item() * 3, start_pos["pos_z"][0].item() * 3)
+        print(start_pos)
+        # print("start pos:")
+        # print(start_pos)
+        #
+        # print("Screen c")
+        # print(P.screen_c)
+        # quit()
 
         # immediately present trials in KBYG trials
         if self.block_task == "KBYG":
@@ -259,13 +271,16 @@ class GripApertureRedux(klibs.Experiment):
             else:
                 # fetch current position
                 curr_pos = self.ot.position()
-                curr_pos = (curr_pos[0], curr_pos[2])
-                print(f"Current position: {curr_pos}")
+                curr_pos = (curr_pos["pos_x"][0].item() * 3, curr_pos["pos_z"][0].item() * 3)
+
+                # print("Target bounds:")
+                # print(self.locs[self.target_loc])
+                # print("Current Pos:")
+                # print(curr_pos)
 
                 # Present target once reach exceeds threshold
                 # NOTE: only relevant for GBYK trials, will already be True during KBYG trials
                 if not self.target_visible:
-                    print(f"Distance: {line_segment_len(start_pos, curr_pos)}")
                     if line_segment_len(start_pos, curr_pos) > self.reach_threshold:
                         self.present_stimuli(target=True)
                         self.target_visible = True
@@ -275,10 +290,11 @@ class GripApertureRedux(klibs.Experiment):
                 # log if & which object has been grasped
                 elif self.object_grasped is None:
                     self.object_grasped = self.bounds.which_boundary(curr_pos)
-                    print(f"Object grasped: {self.object_grasped}")
 
                 # log time to taken to complete reach
                 else:
+                    print("Object grasped is:")
+                    print(self.object_grasped)
                     # NOTE: relative to rt/go-signal onset
                     self.mt = self.evm.trial_time_ms - self.rt
                     break
@@ -375,7 +391,7 @@ class GripApertureRedux(klibs.Experiment):
 
             # Timestamp marker data with relative trial time
             header = list(marker_set["markers"][0].keys())
-            header.append("trial_time")
+            # header.append("trial_time")
 
             # if file doesn't exist, create it and write header
             if not os.path.exists(fname):
@@ -389,5 +405,5 @@ class GripApertureRedux(klibs.Experiment):
 
                 for marker in marker_set.get("markers", None):
                     if marker is not None:
-                        marker["trial_time"] = self.evm.trial_time_ms
+                        # marker["trial_time"] = self.evm.trial_time_ms
                         writer.writerow(marker)
