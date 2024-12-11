@@ -6,7 +6,6 @@ __author__ = "Brett Feltmate"
 import os
 from csv import DictWriter
 from random import randrange
-from math import floor
 
 # local imports
 from get_key_state import get_key_state  # type: ignore[import]
@@ -33,25 +32,19 @@ from pyfirmata import serial
 GO_SIGNAL_ONSET = (500, 2000)
 REACH_WINDOW_POST_GO_SIGNAL = 500
 TRIAL_DURATION = 5000
-REACH_DISTANCE_THRESHOLD = (100, 200)
+REACH_DISTANCE_THRESHOLD = (10, 20)
 
 # audio
-TONE_DURATION = 50
+TONE_DURATION = 100
 TONE_SHAPE = "sine"
 TONE_FREQ = 784  # ridin' on yo G5 airplane
-TONE_VOLUME = 0.5
-
-# sizings
-PX_PER_CM = int(P.ppi / 2.54)
-DIAM_SMALL = 4 * PX_PER_CM
-DIAM_LARGE = 8 * PX_PER_CM
-BRIMWIDTH = 1 * PX_PER_CM
-POS_OFFSET = 6 * PX_PER_CM
+TONE_VOLUME = 1.0
 
 
 # fills
 WHITE = (255, 255, 255, 255)
 GRUE = (90, 90, 96, 255)
+RED = (255, 0, 0, 255)
 
 # anti-typo protections
 LEFT = "left"
@@ -68,6 +61,13 @@ CLOSE = b"56"
 
 class GripApertureRedux(klibs.Experiment):
     def setup(self):
+
+        # sizings
+        PX_PER_CM = int(P.ppi / 2.54)
+        DIAM_SMALL = 4 * PX_PER_CM
+        DIAM_LARGE = 8 * PX_PER_CM
+        BRIMWIDTH = 1 * PX_PER_CM
+        POS_OFFSET = 6 * PX_PER_CM
         # setup optitracker
         self.ot = OptiTracker(marker_count=12, sample_rate=120, window_size=2)
 
@@ -84,6 +84,11 @@ class GripApertureRedux(klibs.Experiment):
         self.locs = {
             LEFT: (P.screen_c[0] - POS_OFFSET, P.screen_c[1]),  # type: ignore[attr-defined]
             RIGHT: (P.screen_c[0] + POS_OFFSET, P.screen_c[1]),  # type: ignore[attr-defined]
+        }
+
+        self.sizes = {
+            SMALL: DIAM_SMALL,
+            LARGE: DIAM_LARGE,
         }
 
         # spawn object placeholders
@@ -168,13 +173,13 @@ class GripApertureRedux(klibs.Experiment):
         self.target_boundary = CircleBoundary(
             label="target",
             center=self.locs[self.target_loc],  # type: ignore[attr-defined]
-            radius=floor(self.target_size * 0.75),  # type: ignore[attr-defined]
+            radius=self.sizes[self.target_size] * 0.75,  # type: ignore[attr-defined]
         )
 
         self.distractor_boundary = CircleBoundary(
             label="distractor",
             center=self.locs[self.distractor_loc],  # type: ignore[attr-defined]
-            radius=floor(self.distractor_size * 0.75),  # type: ignore[attr-defined]
+            radius=self.sizes[self.distractor_size] * 0.75,  # type: ignore[attr-defined]
         )
 
         self.bounds = BoundarySet([self.target_boundary, self.distractor_boundary])
@@ -247,16 +252,19 @@ class GripApertureRedux(klibs.Experiment):
                 if get_key_state("space") == 0:
                     # recorde time from go signal to reach onset
                     self.rt = self.evm.trial_time_ms - go_signal_onset_time
+                    print(f"RT: {self.rt}")
 
             # Whilst reach in motion
             else:
                 # fetch current position
                 curr_pos = self.ot.position()
                 curr_pos = (curr_pos[0], curr_pos[2])
+                print(f"Current position: {curr_pos}")
 
                 # Present target once reach exceeds threshold
                 # NOTE: only relevant for GBYK trials, will already be True during KBYG trials
                 if not self.target_visible:
+                    print(f"Distance: {line_segment_len(start_pos, curr_pos)}")
                     if line_segment_len(start_pos, curr_pos) > self.reach_threshold:
                         self.present_stimuli(target=True)
                         self.target_visible = True
@@ -266,6 +274,7 @@ class GripApertureRedux(klibs.Experiment):
                 # log if & which object has been grasped
                 elif self.object_grasped is None:
                     self.object_grasped = self.bounds.which_boundary(curr_pos)
+                    print(f"Object grasped: {self.object_grasped}")
 
                 # log time to taken to complete reach
                 else:
@@ -296,11 +305,11 @@ class GripApertureRedux(klibs.Experiment):
         clear()
 
         # Don't lock up system while waiting for trial to end
-        while self.evm.before("trial_finished"):
+        while self.evm.before("trial_timeout"):
             _ = ui_request()
 
         # TODO: ask Anne & Kevin whether post-grasp data is worth recording
-        self.nnc.shutdown()
+        # self.nnc.shutdown()
 
         return {
             "block_num": P.block_number,
