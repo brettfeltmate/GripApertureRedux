@@ -6,7 +6,6 @@ __author__ = "Brett Feltmate"
 import os
 from csv import DictWriter
 from random import randrange
-from pprint import pprint
 
 # local imports
 from get_key_state import get_key_state  # type: ignore[import]
@@ -156,7 +155,6 @@ class GripApertureRedux(klibs.Experiment):
 
     def trial_prep(self):
 
-        self.ot.data_dir = f"{self.block_dir}/trial_{P.trial_number}_hand_markers.csv"  # type: ignore[attr-defined]
         self.reach_threshold = randrange(*REACH_DISTANCE_THRESHOLD, step=10)
 
         # setup trial events/timings
@@ -166,7 +164,9 @@ class GripApertureRedux(klibs.Experiment):
             onset=REACH_WINDOW_POST_GO_SIGNAL,
             after="go_signal",
         )
-        self.evm.add_event(label="trial_timeout", onset=POST_REACH_WINDOW, after="reach_window_closed")
+        self.evm.add_event(
+            label="trial_timeout", onset=POST_REACH_WINDOW, after="reach_window_closed"
+        )
 
         # determine targ/dist locations
         self.distractor_loc = LEFT if self.target_loc == RIGHT else RIGHT  # type: ignore[attr-defined]
@@ -197,6 +197,15 @@ class GripApertureRedux(klibs.Experiment):
 
         self.present_stimuli()  # reset display for trial start
 
+        self.ot.data_dir = (
+            f"{self.block_dir}/"
+            + f"trial_{P.trial_number}"
+            + f"_targetOn_{self.target_loc}"  # type: ignore[attr-defined]
+            + f"_targetSize_{self.target_size}"  # type: ignore[attr-defined]
+            + f"_distractorSize_{self.distractor_size}"  # type: ignore[attr-defined]
+            + "_hand_markers.csv"
+        )
+
         self.nnc.startup()  # start marker tracking
 
         # NOTE: To ensure that file exists before OptiTracker tries to access it.
@@ -205,9 +214,6 @@ class GripApertureRedux(klibs.Experiment):
             _ = ui_request()
 
     def trial(self):  # type: ignore[override]
-        print("Expected marker count:")
-        print(self.ot.marker_count)
-
         hide_mouse_cursor()
 
         # control flags
@@ -217,19 +223,8 @@ class GripApertureRedux(klibs.Experiment):
         self.target_visible = False
         self.object_grasped = None
 
-
         start_pos = self.ot.position()
-        print("start_pos (raw from opti)")
-        print(start_pos)
-        print("start_pos (munged)")
         start_pos = (start_pos["pos_x"][0].item() * 3, start_pos["pos_z"][0].item() * 3)
-        print(start_pos)
-        # print("start pos:")
-        # print(start_pos)
-        #
-        # print("Screen c")
-        # print(P.screen_c)
-        # quit()
 
         # immediately present trials in KBYG trials
         if self.block_task == "KBYG":
@@ -267,18 +262,15 @@ class GripApertureRedux(klibs.Experiment):
                 if get_key_state("space") == 0:
                     # recorde time from go signal to reach onset
                     self.rt = self.evm.trial_time_ms - go_signal_onset_time
-                    print(f"RT: {self.rt}")
 
             # Whilst reach in motion
             else:
                 # fetch current position
                 curr_pos = self.ot.position()
-                curr_pos = (curr_pos["pos_x"][0].item() * 3, curr_pos["pos_z"][0].item() * 3)
-
-                # print("Target bounds:")
-                # print(self.locs[self.target_loc])
-                # print("Current Pos:")
-                # print(curr_pos)
+                curr_pos = (
+                    curr_pos["pos_x"][0].item() * 3,
+                    curr_pos["pos_z"][0].item() * 3,
+                )
 
                 # Present target once reach exceeds threshold
                 # NOTE: only relevant for GBYK trials, will already be True during KBYG trials
@@ -295,8 +287,6 @@ class GripApertureRedux(klibs.Experiment):
 
                 # log time to taken to complete reach
                 else:
-                    print("Object grasped is:")
-                    print(self.object_grasped)
                     self.nnc.shutdown()
                     # NOTE: relative to rt/go-signal onset
                     self.mt = self.evm.trial_time_ms - self.rt
@@ -405,11 +395,6 @@ class GripApertureRedux(klibs.Experiment):
             # append marker data to file
             with open(fname, "a", newline="") as file:
                 writer = DictWriter(file, fieldnames=header)
-                i = 0
                 for marker in marker_set.get("markers", None):
-                    if i < self.ot.marker_count:
-                    # pprint(marker)
-                        if marker is not None:
-                    # marker["trial_time"] = self.evm.trial_time_ms
-                            writer.writerow(marker)
-                            i += 1
+                    if marker is not None:
+                        writer.writerow(marker)
