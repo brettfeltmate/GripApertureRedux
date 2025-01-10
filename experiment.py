@@ -277,6 +277,7 @@ class GripApertureRedux(klibs.Experiment):
 
                 # Present target once reach exceeds threshold
                 # NOTE: only relevant for GBYK trials, will already be True during KBYG trials
+                # TODO: add in time constraint for a half-assed velocity threshold
                 if not self.target_visible:
                     if line_segment_len(start_pos, curr_pos) > self.reach_threshold:
                         self.present_stimuli(target=True)
