@@ -55,6 +55,7 @@ CREATE TABLE trials (
     block_num integer not null,
     trial_num integer not null,
     practicing text not null,
+    exp_condition text not null,
     task_type text not null,
     target_loc text not null,
     target_size text not null,

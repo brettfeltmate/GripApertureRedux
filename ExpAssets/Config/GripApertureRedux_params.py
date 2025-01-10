@@ -42,7 +42,7 @@ saccadic_motion_threshold = 0.15
 multi_session_project = False
 trials_per_block = 80
 blocks_per_experiment = 2
-conditions = []
+conditions = ["pinched", "unpinched"]
 default_condition = None
 
 #########################################

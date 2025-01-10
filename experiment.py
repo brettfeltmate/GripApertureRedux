@@ -120,17 +120,20 @@ class GripApertureRedux(klibs.Experiment):
         if not os.path.exists("OptiData"):
             os.mkdir("OptiData")
 
-        os.mkdir(f"OptiData/{P.p_id}")
-        os.mkdir(f"OptiData/{P.p_id}/testing")
+        if not os.path.exists(f"OptiData/{P.condition}"):
+            os.mkdir(f"OptiData/{P.condition}")
+
+        os.mkdir(f"OptiData/{P.condition}/{P.p_id}")
+        os.mkdir(f"OptiData/{P.condition}/{P.p_id}/testing")
 
         if P.run_practice_blocks:
-            os.mkdir(f"OptiData/{P.p_id}/practice")
+            os.mkdir(f"OptiData/{P.condition}/{P.p_id}/practice")
 
     def block(self):
 
         self.block_task = self.block_sequence.pop(0)
 
-        self.block_dir = f"OptiData/{P.p_id}"
+        self.block_dir = f"OptiData/{P.condition}/{P.p_id}"
         self.block_dir += "/practice" if P.practicing else "/testing"
         self.block_dir += f"/{self.block_task}"
 
@@ -325,6 +328,7 @@ class GripApertureRedux(klibs.Experiment):
             "block_num": P.block_number,
             "trial_num": P.trial_number,
             "practicing": P.practicing,
+            "exp_condition": P.condition,
             "task_type": self.block_task,
             "target_loc": self.target_loc,  # type: ignore[attr-defined]
             "target_size": self.target_size,  # type: ignore[attr-defined]
