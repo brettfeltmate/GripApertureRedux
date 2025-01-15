@@ -25,16 +25,16 @@ from klibs.KLTime import CountDown
 
 from natnetclient_rough import NatNetClient  # type: ignore[import]
 from OptiTracker import OptiTracker  # type: ignore[import]
-from pyfirmata import serial
+from pyfirmata import serial  # type: ignore[import]
 
 # experiment constants
 
 # timings
 GO_SIGNAL_ONSET = (500, 2000)
 # TODO: Make this relative to rt
-REACH_WINDOW_POST_GO_SIGNAL = 850
+REACH_WINDOW_POST_GO_SIGNAL = 1000
 POST_REACH_WINDOW = 1000
-REACH_DISTANCE_THRESHOLD = (100, 200)
+REACH_DISTANCE_THRESHOLD = (50, 100)
 
 # audio
 TONE_DURATION = 100
@@ -66,10 +66,10 @@ class GripApertureRedux(klibs.Experiment):
 
         # sizings
         PX_PER_CM = int(P.ppi / 2.54)
-        DIAM_SMALL = 4 * PX_PER_CM
-        DIAM_LARGE = 8 * PX_PER_CM
+        DIAM_SMALL = 5 * PX_PER_CM
+        DIAM_LARGE = 9 * PX_PER_CM
         BRIMWIDTH = 1 * PX_PER_CM
-        POS_OFFSET = 6 * PX_PER_CM
+        POS_OFFSET = 10 * PX_PER_CM
         # setup optitracker
         self.ot = OptiTracker(marker_count=10, sample_rate=120, window_size=5)
 
@@ -188,7 +188,7 @@ class GripApertureRedux(klibs.Experiment):
 
         # instruct experimenter on prop placements
         self.goggles.write(CLOSE)
-        self.present_stimuli(prep=True)
+        self.present_stimuli(prep=True, cursor = P.development_mode)
 
         while True:  # participant readiness signalled by keypress
             q = pump(True)
@@ -205,8 +205,8 @@ class GripApertureRedux(klibs.Experiment):
             _ = ui_request()
 
     def trial(self):  # type: ignore[override]
-        print("Expected marker count:")
-        print(self.ot.marker_count)
+        print("Target on {} side")
+
 
         hide_mouse_cursor()
 
@@ -219,11 +219,12 @@ class GripApertureRedux(klibs.Experiment):
 
 
         start_pos = self.ot.position()
-        print("start_pos (raw from opti)")
-        print(start_pos)
-        print("start_pos (munged)")
-        start_pos = (start_pos["pos_x"][0].item() * 3, start_pos["pos_z"][0].item() * 3)
-        print(start_pos)
+        # print("start_pos (raw from opti)")
+        # print(start_pos)
+        # print("start_pos (munged)")
+        # start_pos = (start_pos["pos_x"][0].item() * 3, start_pos["pos_z"][0].item() * 3)
+        start_pos = (start_pos["pos_x"][0].item(), start_pos["pos_z"][0].item())
+        # print(start_pos)
         # print("start pos:")
         # print(start_pos)
         #
@@ -267,24 +268,26 @@ class GripApertureRedux(klibs.Experiment):
                 if get_key_state("space") == 0:
                     # recorde time from go signal to reach onset
                     self.rt = self.evm.trial_time_ms - go_signal_onset_time
-                    print(f"RT: {self.rt}")
+                    # print(f"RT: {self.rt}")
 
             # Whilst reach in motion
             else:
+                # self.present_stimuli(cursor = P.development_mode)
                 # fetch current position
                 curr_pos = self.ot.position()
-                curr_pos = (curr_pos["pos_x"][0].item() * 3, curr_pos["pos_z"][0].item() * 3)
+                curr_pos = (curr_pos["pos_x"][0].item(), curr_pos["pos_z"][0].item())
+                # curr_pos = (curr_pos["pos_x"][0].item() * 3, curr_pos["pos_z"][0].item() * 3)
 
-                # print("Target bounds:")
-                # print(self.locs[self.target_loc])
-                # print("Current Pos:")
-                # print(curr_pos)
+                print("Target bounds:")
+                print(self.locs[self.target_loc])
+                print("Current Pos:")
+                print(curr_pos)
 
                 # Present target once reach exceeds threshold
                 # NOTE: only relevant for GBYK trials, will already be True during KBYG trials
                 if not self.target_visible:
                     if line_segment_len(start_pos, curr_pos) > self.reach_threshold:
-                        self.present_stimuli(target=True)
+                        self.present_stimuli(target=True, cursor = P.development_mode)
                         self.target_visible = True
                         # note time at which target was presented
                         self.target_onset_time = self.evm.trial_time_ms
@@ -356,7 +359,7 @@ class GripApertureRedux(klibs.Experiment):
         pass
 
     # conditionally present stimuli
-    def present_stimuli(self, prep=False, target=False):
+    def present_stimuli(self, prep=False, target=False, cursor=False):
         fill()
 
         if prep:
@@ -377,6 +380,13 @@ class GripApertureRedux(klibs.Experiment):
             location=self.locs[self.distractor_loc],
         )
         blit(target_holder, registration=5, location=self.locs[self.target_loc])  # type: ignore[attr-defined]
+
+        # if cursor:
+        #     pass
+        # start_pos = self.ot.position()
+        # start_pos = (start_pos["pos_x"][0].item() * 3, start_pos["pos_z"][0].item() * 3)
+
+        # blit(self.cursor, registration = 5, location = start_pos)
 
         flip()
 
