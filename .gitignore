@@ -1,6 +1,5 @@
 **/*.pyc
 **/.*
-scratch.py
 !.gitignore
 ExpAssets/*.db
 ExpAssets/*.db.backup
@@ -9,3 +8,5 @@ ExpAssets/EDF/**
 ExpAssets/.versions/**
 ExpAssets/Local
 ExpAssets/Local/**
+OptiData
+scratch
