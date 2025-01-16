@@ -191,7 +191,7 @@ class GripApertureRedux(klibs.Experiment):
 
         # instruct experimenter on prop placements
         self.goggles.write(CLOSE)
-        self.present_stimuli(prep=True, cursor = P.development_mode)
+        self.present_stimuli(prep=True)
 
         while True:  # participant readiness signalled by keypress
             q = pump(True)
@@ -211,15 +211,12 @@ class GripApertureRedux(klibs.Experiment):
 
         self.nnc.startup()  # start marker tracking
 
-        # NOTE: To ensure that file exists before OptiTracker tries to access it.
-        nnc_lead_time = CountDown(0.5)
+        # Let opti write out a few frames before attempting to query from them
+        nnc_lead_time = CountDown(0.034)
         while nnc_lead_time.counting():
             _ = ui_request()
 
     def trial(self):  # type: ignore[override]
-        print("Target on {} side")
-
-
         hide_mouse_cursor()
 
         # control flags
@@ -229,24 +226,14 @@ class GripApertureRedux(klibs.Experiment):
         self.target_visible = False
         self.object_grasped = None
 
-        start_pos = self.ot.position()
-        # print("start_pos (raw from opti)")
-        # print(start_pos)
-        # print("start_pos (munged)")
-        # start_pos = (start_pos["pos_x"][0].item() * 3, start_pos["pos_z"][0].item() * 3)
-        start_pos = (start_pos["pos_x"][0].item(), start_pos["pos_z"][0].item())
-        # print(start_pos)
-        # print("start pos:")
-        # print(start_pos)
-        #
-        # print("Screen c")
-        # print(P.screen_c)
-        # quit()
-
         # immediately present trials in KBYG trials
         if self.block_task == "KBYG":
             self.present_stimuli(target=True)
             self.target_visible = True
+
+        # reference point to determine if/when to present targets in GBYK trials
+        start_pos = self.ot.position()
+        start_pos = (start_pos["pos_x"][0].item(), start_pos["pos_z"][0].item())
 
         # restrict movement until go signal received
         while self.evm.before("go_signal"):
@@ -270,36 +257,27 @@ class GripApertureRedux(klibs.Experiment):
         self.go_signal.play()  # play go-signal
         self.goggles.write(OPEN)  # open goggles
 
-        # monitor movement status
+        # monitor movement status following go-signal
         while self.evm.before("reach_window_closed"):
             _ = ui_request()
 
             # key release indicates reach is in motion
             if self.rt is None:
                 if get_key_state("space") == 0:
-                    # recorde time from go signal to reach onset
+                    # treat time from go-signal to button release as reaction time
                     self.rt = self.evm.trial_time_ms - go_signal_onset_time
-                    # print(f"RT: {self.rt}")
 
             # Whilst reach in motion
             else:
-                # self.present_stimuli(cursor = P.development_mode)
-                # fetch current position
+                # Monitor hand position
                 curr_pos = self.ot.position()
                 curr_pos = (curr_pos["pos_x"][0].item(), curr_pos["pos_z"][0].item())
-                # curr_pos = (curr_pos["pos_x"][0].item() * 3, curr_pos["pos_z"][0].item() * 3)
 
-                print("Target bounds:")
-                print(self.locs[self.target_loc])
-                print("Current Pos:")
-                print(curr_pos)
-
-                # Present target once reach exceeds threshold
-                # NOTE: only relevant for GBYK trials, will already be True during KBYG trials
-                # TODO: add in time constraint for a half-assed velocity threshold
+                # In GBYK blocks, present target once reach exceeds distance threshold
                 if not self.target_visible:
+                    # TODO: add in time constraint as a half-assed velocity measure
                     if line_segment_len(start_pos, curr_pos) > self.reach_threshold:
-                        self.present_stimuli(target=True, cursor = P.development_mode)
+                        self.present_stimuli(target=True)
                         self.target_visible = True
                         # note time at which target was presented
                         self.target_onset_time = self.evm.trial_time_ms
@@ -308,10 +286,9 @@ class GripApertureRedux(klibs.Experiment):
                 elif self.object_grasped is None:
                     self.object_grasped = self.bounds.which_boundary(curr_pos)
 
-                # log time to taken to complete reach
                 else:
                     self.nnc.shutdown()
-                    # NOTE: relative to rt/go-signal onset
+                    # time from button release to object grasped
                     self.mt = self.evm.trial_time_ms - self.rt
                     break
 
@@ -370,7 +347,7 @@ class GripApertureRedux(klibs.Experiment):
         pass
 
     # conditionally present stimuli
-    def present_stimuli(self, prep=False, target=False, cursor=False):
+    def present_stimuli(self, prep=False, target=False):
         fill()
 
         if prep:
@@ -392,13 +369,6 @@ class GripApertureRedux(klibs.Experiment):
         )
         blit(target_holder, registration=5, location=self.locs[self.target_loc])  # type: ignore[attr-defined]
 
-        # if cursor:
-        #     pass
-        # start_pos = self.ot.position()
-        # start_pos = (start_pos["pos_x"][0].item() * 3, start_pos["pos_z"][0].item() * 3)
-
-        # blit(self.cursor, registration = 5, location = start_pos)
-
         flip()
 
     def marker_set_listener(self, marker_set: dict) -> None:
@@ -412,10 +382,7 @@ class GripApertureRedux(klibs.Experiment):
         if marker_set.get("label") == "hand":
             # Append data to trial-specific CSV file
             fname = self.ot.data_dir
-
-            # Timestamp marker data with relative trial time
             header = list(marker_set["markers"][0].keys())
-            # header.append("trial_time")
 
             # if file doesn't exist, create it and write header
             if not os.path.exists(fname):
