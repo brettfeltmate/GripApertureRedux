@@ -64,11 +64,11 @@ class GripApertureRedux(klibs.Experiment):
     def setup(self):
 
         # sizings
-        PX_PER_CM = int(P.ppi / 2.54)
-        DIAM_SMALL = 5 * PX_PER_CM
-        DIAM_LARGE = 9 * PX_PER_CM
-        BRIMWIDTH = 1 * PX_PER_CM
-        POS_OFFSET = 10 * PX_PER_CM
+        self.px_cm = int(P.ppi / 2.54)
+        DIAM_SMALL = 5 * self.px_cm
+        DIAM_LARGE = 9 * self.px_cm
+        BRIMWIDTH = 1 * self.px_cm
+        POS_OFFSET = 10 * self.px_cm
         # setup optitracker
         self.ot = OptiTracker(marker_count=10, sample_rate=120, window_size=5)
 
@@ -233,7 +233,10 @@ class GripApertureRedux(klibs.Experiment):
 
         # reference point to determine if/when to present targets in GBYK trials
         start_pos = self.ot.position()
-        start_pos = (start_pos["pos_x"][0].item(), start_pos["pos_z"][0].item())
+        start_pos = (
+            start_pos["pos_x"][0].item() * self.px_cm,
+            start_pos["pos_z"][0].item() * self.px_cm
+        )
 
         # restrict movement until go signal received
         while self.evm.before("go_signal"):
@@ -271,7 +274,10 @@ class GripApertureRedux(klibs.Experiment):
             else:
                 # Monitor hand position
                 curr_pos = self.ot.position()
-                curr_pos = (curr_pos["pos_x"][0].item(), curr_pos["pos_z"][0].item())
+                curr_pos = (
+                    curr_pos["pos_x"][0].item() * self.px_cm,
+                    curr_pos["pos_z"][0].item() * self.px_cm
+                )
 
                 # In GBYK blocks, present target once reach exceeds distance threshold
                 if not self.target_visible:
