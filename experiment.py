@@ -33,7 +33,8 @@ GO_SIGNAL_ONSET = (500, 2000)
 # TODO: Make this relative to rt
 REACH_WINDOW_POST_GO_SIGNAL = 1000
 POST_REACH_WINDOW = 1000
-REACH_DISTANCE_THRESHOLD = (50, 100)
+GBYK_DISTANCE_THRESHOLD = (50, 100)  # these two determine when to present target
+GBYK_TIMING_THRESHOLD = 0.2  # NOTE: this is in seconds, not ms
 
 # audio
 TONE_DURATION = 100
@@ -62,6 +63,17 @@ CLOSE = b"56"
 
 class GripApertureRedux(klibs.Experiment):
     def setup(self):
+        # ensure starting position is specified (needed to properly sort data)
+        if P.condition is None:
+            raise RuntimeError((
+                "Condition not specified!."
+                "\nSpecify starting position at runtime by passing the -c flag."
+                "\ne.g."
+                "\n\nklibs run 24 -c pinched"
+                "\nor"
+                "\nklibs run 24 -c unpinched"
+                ""
+            ))
 
         # sizings
         self.px_cm = int(P.ppi / 2.54)
@@ -69,6 +81,7 @@ class GripApertureRedux(klibs.Experiment):
         DIAM_LARGE = 9 * self.px_cm
         BRIMWIDTH = 1 * self.px_cm
         POS_OFFSET = 10 * self.px_cm
+
         # setup optitracker
         self.ot = OptiTracker(marker_count=10, sample_rate=120, window_size=5)
 
@@ -158,7 +171,7 @@ class GripApertureRedux(klibs.Experiment):
 
     def trial_prep(self):
 
-        self.reach_threshold = randrange(*REACH_DISTANCE_THRESHOLD, step=10)
+        self.reach_threshold = randrange(*GBYK_DISTANCE_THRESHOLD, step=10)
 
         # setup trial events/timings
         self.evm.add_event(label="go_signal", onset=randrange(*GO_SIGNAL_ONSET))
@@ -282,11 +295,16 @@ class GripApertureRedux(klibs.Experiment):
                 # In GBYK blocks, present target once reach exceeds distance threshold
                 if not self.target_visible:
                     # TODO: add in time constraint as a half-assed velocity measure
-                    if line_segment_len(start_pos, curr_pos) > self.reach_threshold:
-                        self.present_stimuli(target=True)
-                        self.target_visible = True
-                        # note time at which target was presented
-                        self.target_onset_time = self.evm.trial_time_ms
+                    reached_threshold = False
+                    timeout = CountDown(GBYK_TIMING_THRESHOLD)
+
+                    while timeout.counting() and not reached_threshold:
+
+                        if line_segment_len(start_pos, curr_pos) > self.reach_threshold:
+                            self.present_stimuli(target=True)
+                            self.target_visible = True
+                            # note time at which target was presented
+                            self.target_onset_time = self.evm.trial_time_ms
 
                 # log if & which object has been grasped
                 elif self.object_grasped is None:
