@@ -10,7 +10,7 @@ from random import randrange
 # local imports
 from get_key_state import get_key_state  # type: ignore[import]
 
-import klibs
+
 from klibs import P
 from klibs.KLAudio import Tone
 from klibs.KLCommunication import message
@@ -114,6 +114,7 @@ class GripApertureRedux(klibs.Experiment):
             DISTRACTOR: {
                 SMALL: kld.Annulus(DIAM_SMALL, BRIMWIDTH),
                 LARGE: kld.Annulus(DIAM_LARGE, BRIMWIDTH),
+                ""
             },
         }
 
@@ -296,24 +297,30 @@ class GripApertureRedux(klibs.Experiment):
                 if not self.target_visible:
                     # TODO: add in time constraint as a half-assed velocity measure
                     reached_threshold = False
-                    timeout = CountDown(GBYK_TIMING_THRESHOLD)
+                    # timeout = CountDown(GBYK_TIMING_THRESHOLD)
 
-                    while timeout.counting() and not reached_threshold:
+                    # while timeout.counting() and not reached_threshold:
 
-                        if line_segment_len(start_pos, curr_pos) > self.reach_threshold:
-                            self.present_stimuli(target=True)
-                            self.target_visible = True
-                            # note time at which target was presented
-                            self.target_onset_time = self.evm.trial_time_ms
+                    if line_segment_len(start_pos, curr_pos) > self.reach_threshold:
+                        self.present_stimuli(target=True)
+                        self.target_visible = True
+                        # note time at which target was presented
+                        self.target_onset_time = self.evm.trial_time_ms
 
                 # log if & which object has been grasped
                 elif self.object_grasped is None:
                     self.object_grasped = self.bounds.which_boundary(curr_pos)
 
                 else:
+                    self.mt = self.evm.trial_time_ms - self.rt
+
+                    timeout = CountDown(.3)
+                    while timeout.counting():
+                        q = pump(True)
+                        _ = ui_request(queue=q)
+
                     self.nnc.shutdown()
                     # time from button release to object grasped
-                    self.mt = self.evm.trial_time_ms - self.rt
                     break
 
         # if reach window closes before object is grasped, trial is aborted
