@@ -1,4 +1,4 @@
-**/*.pyc
+b**/*.pyc
 **/.*
 !.gitignore
 ExpAssets/*.db
