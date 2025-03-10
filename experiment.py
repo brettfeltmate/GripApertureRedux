@@ -17,7 +17,7 @@ from klibs.KLCommunication import message
 from klibs.KLExceptions import TrialException
 from klibs.KLGraphics import KLDraw as kld
 from klibs.KLGraphics import blit, fill, flip, clear
-from klibs.KLUserInterface import any_key, key_pressed, ui_request
+from klibs.KLUserInterface import any_key, key_pressed, ui_request, smart_sleep
 from klibs.KLUtilities import hide_mouse_cursor, line_segment_len, pump
 from klibs.KLBoundary import CircleBoundary, BoundarySet
 from klibs.KLTime import CountDown
@@ -258,17 +258,7 @@ class GripApertureRedux(klibs.Experiment):
         while self.evm.before("go_signal"):
             _ = ui_request()
             if get_key_state("space") == 0:
-                self.evm.reset()
-
-                fill()
-                message(
-                    "Please wait for the go signal.",
-                    location=P.screen_c,
-                )
-                flip()
-
-                # TODO: keep register of aborted trials
-                raise TrialException("Premature reach.")
+                self.abort_trial("Premature reach")
 
         # used to calculate RT, also logged for analysis purposes
         go_signal_onset_time = self.evm.trial_time_ms
@@ -297,11 +287,6 @@ class GripApertureRedux(klibs.Experiment):
 
                 # In GBYK blocks, present target once reach exceeds distance threshold
                 if not self.target_visible:
-                    # TODO: add in time constraint as a half-assed velocity measure
-                    reached_threshold = False
-                    # timeout = CountDown(GBYK_TIMING_THRESHOLD)
-
-                    # while timeout.counting() and not reached_threshold:
 
                     if line_segment_len(start_pos, curr_pos) > self.reach_threshold:
                         self.present_stimuli(target=True)
@@ -327,22 +312,7 @@ class GripApertureRedux(klibs.Experiment):
 
         # if reach window closes before object is grasped, trial is aborted
         if self.object_grasped is None:
-            self.nnc.shutdown()
-
-            # admonish participant
-            fill()
-            message("Too slow!", location=P.screen_c, registration=5, blit_txt=True)
-            flip()
-
-            count = CountDown(0.5)
-
-            while count.counting():
-                _ = ui_request()
-
-            os.remove(self.ot.data_dir)
-
-            # TODO: keep register of aborted trials
-            raise TrialException("Reach timeout.")
+            self.abort_trial("Reach timeout")
 
         # Clear display as task is either complete or been aborted
         clear()
@@ -350,9 +320,6 @@ class GripApertureRedux(klibs.Experiment):
         # Don't lock up system while waiting for trial to end
         while self.evm.before("trial_timeout"):
             _ = ui_request()
-
-        # TODO: ask Anne & Kevin whether post-grasp data is worth recording
-        # self.nnc.shutdown()
 
         return {
             "block_num": P.block_number,
@@ -378,6 +345,25 @@ class GripApertureRedux(klibs.Experiment):
 
     def clean_up(self):
         pass
+
+    def abort_trial(self, err=""):
+        msgs={
+            "Premature reach": "Please wait for the go signal.",
+            "Reach timeout": "Too slow!",
+        }
+
+        self.goggles.write(OPEN)
+        self.nnc.shutdown()
+        os.remove(self.ot.data_dir)
+
+        fill()
+        message(msgs.get(err, "Unknown error"), location=P.screen_c, blit_txt=True)
+        flip()
+
+
+        smart_sleep(1000)
+
+        raise TrialException(err)
 
     # conditionally present stimuli
     def present_stimuli(self, prep=False, target=False):
