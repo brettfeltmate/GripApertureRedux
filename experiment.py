@@ -10,7 +10,7 @@ from random import randrange
 # local imports
 from get_key_state import get_key_state  # type: ignore[import]
 
-
+import klibs
 from klibs import P
 from klibs.KLAudio import Tone
 from klibs.KLCommunication import message
@@ -114,7 +114,6 @@ class GripApertureRedux(klibs.Experiment):
             DISTRACTOR: {
                 SMALL: kld.Annulus(DIAM_SMALL, BRIMWIDTH),
                 LARGE: kld.Annulus(DIAM_LARGE, BRIMWIDTH),
-                ""
             },
         }
 
