@@ -2,9 +2,9 @@ import os
 import numpy as np
 import sqlite3
 from scipy.signal import butter, sosfiltfilt
-import klibs
-import warnings
-from pprint import pprint
+
+
+
 # from klibs.KLDatabase import KLDatabase as kld
 
 # TODO:
@@ -61,17 +61,16 @@ class OptiTracker(object):
 
         # self.cursor = self.db.cursor()
 
-        db_scheme = '''
+        db_scheme = """
         CREATE TABLE IF NOT EXISTS frames (
             frame_number INTEGER PRIMARY KEY,
             pos_x REAL,
             pos_y REAL,
             pos_z REAL
         )
-        '''
+        """
 
         # self.cursor.execute(db_scheme)
-
 
     # @property
     # def database(self) -> str:
@@ -137,7 +136,7 @@ class OptiTracker(object):
     def position(self) -> np.ndarray:
         """Get the current position of markers."""
         frame = self.__query_frames(num_frames=1)
-        return self.__column_means(smooth = False, frames = frame)
+        return self.__column_means(smooth=False, frames=frame)
 
     def distance(self, num_frames: int = 0) -> float:
         """Calculate and return the distance traveled over the specified number of frames."""
@@ -182,7 +181,7 @@ class OptiTracker(object):
         if frames.size == 0:
             frames = self.__query_frames()
 
-        positions = self.__column_means(smooth = True, frames = frames)
+        positions = self.__column_means(smooth=True, frames=frames)
 
         # print("[__euclidean_distance()]")
         # print("Frames queried:")
@@ -244,7 +243,9 @@ class OptiTracker(object):
 
         return smooth
 
-    def __column_means(self, smooth:bool = True, frames: np.ndarray = np.array([])) -> np.ndarray:
+    def __column_means(
+        self, smooth: bool = True, frames: np.ndarray = np.array([])
+    ) -> np.ndarray:
         """
         Calculate column means of position data.
 
@@ -290,7 +291,6 @@ class OptiTracker(object):
             #     while not len(frame) and tmp >= start:
             #         frame = frames[frames["frame_number"] == tmp,]
             #         tmp -= 1
-
 
             idx = frame_number - start
             means[idx]["pos_x"] = np.mean(this_frame["pos_x"])
@@ -361,7 +361,7 @@ class OptiTracker(object):
             self.__data_dir, delimiter=",", dtype=dtype_map, skip_header=1
         )
 
-        for col in ['pos_x', 'pos_y', 'pos_z']:
+        for col in ["pos_x", "pos_y", "pos_z"]:
             # rescale from mm to cm
             data[col] = np.rint(data[col] * 100).astype(np.int32)
 
@@ -376,7 +376,7 @@ class OptiTracker(object):
         data = data[data["frame_number"] > lookback]
 
         return data
-    
+
     def __connect(self, db_name: str = "optitracker.db") -> sqlite3.Connection:
         """
         Connect to the SQLite database.
