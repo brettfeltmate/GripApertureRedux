@@ -8,5 +8,14 @@ ExpAssets/EDF/**
 ExpAssets/.versions/**
 ExpAssets/Local
 ExpAssets/Local/**
+ExpAssets/Resources/code/bak
+ExpAssets/Resources/code/bak/**
+ExpAssets/Resources/code/bak.bak/**
 OptiData
 scratch
+
+ExpAssets/Resources/code/__pycache__/OptiTracker.cpython-312.pyc
+ExpAssets/Resources/code/__pycache__/test_OptiTracker.cpython-312-pytest-8.3.3.pyc
+ExpAssets/Resources/code/__pycache__/test_correct_outputs_OptiTracker.cpython-312-pytest-8.3.3.pyc
+ExpAssets/Resources/code/__pycache__/test_outputs_OptiTracker.cpython-312-pytest-8.3.3.pyc
+ExpAssets/Resources/code/__pycache__/test_valid_outputs_OptiTracker.cpython-312-pytest-8.3.3.pyc
