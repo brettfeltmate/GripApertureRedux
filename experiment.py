@@ -145,9 +145,12 @@ class GripApertureRedux(klibs.Experiment):
         # TODO: Proper instructions
         instrux = (
             f"Task: {self.block_task}\n"
-            + f"Block: {P.block_number} of {P.blocks_per_experiment}\n"
-            + "(Instrux TBD, grab stuff)"
-            + "\n\nAny key to start block."
+            + f"Block: {P.block_number} of {P.blocks_per_experiment}\n\n"
+            + "Press down on space key to start trial.\n"
+            + "Once you hear the beep, let go of space key and start moving.\n"
+            + "Grab the target object and bring it back towards you.\n"
+            + "You have less than a second to complete the action before the goggles close.\n"
+            + "\n\nPress any key to start block."
         )
 
         fill()
@@ -293,9 +296,16 @@ class GripApertureRedux(klibs.Experiment):
                     self.object_grasped = self.bounds.which_boundary(curr_pos)
 
                 else:
+                    self.mt = self.evm.trial_time_ms - self.rt
+
+                    counter = CountDown(.3)
+
+                    while counter.counting():
+                        q = pump(True)
+                        _ = ui_request(queue=q)
+
                     self.nnc.shutdown()
                     # time from button release to object grasped
-                    self.mt = self.evm.trial_time_ms - self.rt
                     break
 
         # if reach window closes before object is grasped, trial is aborted
@@ -347,7 +357,7 @@ class GripApertureRedux(klibs.Experiment):
         }
 
     def trial_clean_up(self):
-        pass
+        self.nnc.shutdown()
 
     def clean_up(self):
         pass
