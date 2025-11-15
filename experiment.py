@@ -433,6 +433,6 @@ class GripApertureRedux(klibs.Experiment):
             # append marker data to file
             with open(fname, 'a', newline='') as file:
                 writer = DictWriter(file, fieldnames=header)
-                for marker in marker_set.get('markers', None):
-                    if marker is not None:
+                for marker in marker_set.get('markers', {}):
+                    if marker:
                         writer.writerow(marker)
