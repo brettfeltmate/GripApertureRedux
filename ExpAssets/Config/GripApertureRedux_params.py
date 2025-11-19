@@ -43,7 +43,7 @@ multi_session_project = False
 trials_per_block = 80
 blocks_per_experiment = 2
 conditions = ["pinched", "unpinched"]
-default_condition = None
+default_condition = "pinched"
 
 #########################################
 # Development Mode Settings
