@@ -8,7 +8,9 @@ manual_demographics_collection = False
 manual_trial_generation = False
 run_practice_blocks = True
 multi_user = False
-view_distance = 57  # in centimeters, 57cm = 1 deg of visual angle per cm of screen
+view_distance = (
+    57  # in centimeters, 57cm = 1 deg of visual angle per cm of screen
+)
 allow_hidpi = False
 
 #########################################
@@ -23,8 +25,8 @@ eye_tracking = False
 default_fill_color = (45, 45, 45, 255)
 default_color = (255, 255, 255, 255)
 default_font_size = 23
-default_font_unit = "px"
-default_font_name = "Hind-Medium"
+default_font_unit = 'px'
+default_font_name = 'Hind-Medium'
 
 #########################################
 # EyeLink Settings
@@ -42,7 +44,7 @@ saccadic_motion_threshold = 0.15
 multi_session_project = False
 trials_per_block = 80
 blocks_per_experiment = 2
-conditions = ["pinched", "unpinched"]
+conditions = ['pinched', 'unpinched']
 default_condition = None
 
 #########################################
@@ -56,15 +58,19 @@ dm_show_gaze_dot = True
 #########################################
 # Data Export Settings
 #########################################
-primary_table = "trials"
-unique_identifier = "userhash"
-exclude_data_cols = ["created"]
-append_info_cols = ["random_seed"]
-datafile_ext = ".txt"
+primary_table = 'trials'
+unique_identifier = 'userhash'
+exclude_data_cols = ['created']
+append_info_cols = ['random_seed']
+datafile_ext = '.txt'
 append_hostname = False
 
 #########################################
 # PROJECT-SPECIFIC VARS
 #########################################
-task_order = ["GBYK", "KBYG"]
+task_order = ['GBYK', 'KBYG']
 trials_per_practice_block = 8
+cm_wide = 5
+cm_tall = 9
+cm_brim = 1
+cm_offset = 10

@@ -13,13 +13,14 @@ from get_key_state import get_key_state  # type: ignore[import]
 import klibs
 from klibs import P
 from klibs.KLAudio import Tone
+from klibs.KLConstants import STROKE_CENTER
 from klibs.KLCommunication import message
 from klibs.KLExceptions import TrialException
 from klibs.KLGraphics import KLDraw as kld
 from klibs.KLGraphics import blit, fill, flip, clear
 from klibs.KLUserInterface import any_key, key_pressed, ui_request, smart_sleep
 from klibs.KLUtilities import hide_mouse_cursor, line_segment_len, pump
-from klibs.KLBoundary import CircleBoundary, BoundarySet
+from klibs.KLBoundary import RectangleBoundary, BoundarySet
 from klibs.KLTime import CountDown
 
 from natnetclient_rough import NatNetClient  # type: ignore[import]
@@ -54,8 +55,8 @@ RED = (255, 0, 0, 255)
 # anti-typo protections
 LEFT = 'left'
 RIGHT = 'right'
-SMALL = 'small'
-LARGE = 'large'
+WIDE = 'wide'
+TALL = 'tall'
 TARGET = 'target'
 DISTRACTOR = 'distractor'
 GBYK = 'GBYK'
@@ -66,26 +67,13 @@ CLOSE = b'56'
 
 class GripApertureRedux(klibs.Experiment):
     def setup(self):
-        # force experimentor to manually determine participant condition
-        if P.condition is None:
-            raise RuntimeError(
-                (
-                    'Condition not specified!.'
-                    '\nSpecify starting position at runtime by passing the -c flag.'
-                    '\ne.g.'
-                    '\n\nklibs run 24 -c pinched'
-                    '\nor'
-                    '\nklibs run 24 -c unpinched'
-                    ''
-                )
-            )
 
         # sizings
         self.px_cm = int(P.ppi / 2.54)
-        DIAM_SMALL = 5 * self.px_cm
-        DIAM_LARGE = 9 * self.px_cm
-        BRIMWIDTH = 1 * self.px_cm
-        POS_OFFSET = 10 * self.px_cm
+        PX_WIDE = P.cm_wide * self.px_cm
+        PX_TALL = P.cm_tall * self.px_cm
+        PX_BRIM = P.cm_brim * self.px_cm
+        PX_OFFSET = P.cm_offset * self.px_cm
 
         # for working with streamed motion capture data
         self.ot = OptiTracker(marker_count=10, sample_rate=120, window_size=5)
@@ -101,24 +89,40 @@ class GripApertureRedux(klibs.Experiment):
 
         # 12cm between placeholder centers
         self.locs = {
-            LEFT: (P.screen_c[0] - POS_OFFSET, P.screen_c[1]),  # type: ignore[attr-defined]
-            RIGHT: (P.screen_c[0] + POS_OFFSET, P.screen_c[1]),  # type: ignore[attr-defined]
+            LEFT: (P.screen_c[0] - PX_OFFSET, P.screen_c[1]),  # type: ignore[attr-defined]
+            RIGHT: (P.screen_c[0] + PX_OFFSET, P.screen_c[1]),  # type: ignore[attr-defined]
         }
 
         self.sizes = {
-            SMALL: DIAM_SMALL,
-            LARGE: DIAM_LARGE,
+            WIDE: (PX_WIDE, PX_TALL),
+            TALL: (PX_TALL, PX_WIDE),
         }
 
         # spawn object placeholders
         self.placeholders = {
             TARGET: {
-                SMALL: kld.Annulus(DIAM_SMALL, BRIMWIDTH),
-                LARGE: kld.Annulus(DIAM_LARGE, BRIMWIDTH),
+                WIDE: kld.Rectangle(
+                    *self.sizes[WIDE],
+                    stroke=[STROKE_CENTER, PX_BRIM, WHITE],
+                    fill=WHITE,
+                ),
+                TALL: kld.Rectangle(
+                    *self.sizes[TALL],
+                    stroke=[STROKE_CENTER, PX_BRIM, WHITE],
+                    fill=WHITE,
+                ),
             },
             DISTRACTOR: {
-                SMALL: kld.Annulus(DIAM_SMALL, BRIMWIDTH),
-                LARGE: kld.Annulus(DIAM_LARGE, BRIMWIDTH),
+                WIDE: kld.Rectangle(
+                    *self.sizes[WIDE],
+                    stroke=[STROKE_CENTER, PX_BRIM, GRUE],
+                    fill=GRUE,
+                ),
+                TALL: kld.Rectangle(
+                    *self.sizes[TALL],
+                    stroke=[STROKE_CENTER, PX_BRIM, GRUE],
+                    fill=GRUE,
+                ),
             },
         }
 
@@ -205,17 +209,22 @@ class GripApertureRedux(klibs.Experiment):
         # determine targ/dist locations
         self.distractor_loc = LEFT if self.target_loc == RIGHT else RIGHT  # type: ignore[attr-defined]
 
-        # if hand position falls within one of these, presume object within it has been grasped
-        self.target_boundary = CircleBoundary(
-            label='target',
-            center=self.locs[self.target_loc],  # type: ignore[attr-defined]
-            radius=self.sizes[self.target_size],  # type: ignore[attr-defined]
+        target_pts = (
+            self.locs[self.target_loc][0] - self.orientations[self.target_orientation][0] / 2,  # type: ignore[attr-defined, operation]
+            self.locs[self.target_loc][1]  # type: ignore[attr-defined, operation]
+            - self.orientations[self.target_orientation][1] / 2,  # type: ignore[attr-defined, operation]
         )
+        distractor_pts = (
+            self.locs[self.distractor_loc][0] - self.orientations[self.distractor_orientation][0] / 2,  # type: ignore[attr-defined, operation]
+            self.locs[self.distractor_loc][1]  # type: ignore[attr-defined, operation]
+            - self.orientations[self.distractor_orientation][1] / 2,  # type: ignore[attr-defined, operation]
+        )  # type: ignore[attr-defined]
 
-        self.distractor_boundary = CircleBoundary(
-            label='distractor',
-            center=self.locs[self.distractor_loc],  # type: ignore[attr-defined]
-            radius=self.sizes[self.distractor_size],  # type: ignore[attr-defined]
+        # if hand position falls within one of these, presume object within it has been grasped
+        self.target_boundary = RectangleBoundary(label=TARGET, *target_pts)
+
+        self.distractor_boundary = RectangleBoundary(
+            label=DISTRACTOR, *target_pts
         )
 
         self.bounds = BoundarySet(
@@ -238,8 +247,8 @@ class GripApertureRedux(klibs.Experiment):
             f'{self.block_dir}/'
             + f'trial_{P.trial_number}'
             + f'_targetOn_{self.target_loc}'  # type: ignore[attr-defined]
-            + f'_targetSize_{self.target_size}'  # type: ignore[attr-defined]
-            + f'_distractorSize_{self.distractor_size}'  # type: ignore[attr-defined]
+            + f'_targetOrientation_{self.target_orientation}'  # type: ignore[attr-defined]
+            + f'_distractorOrientation_{self.distractor_orientation}'  # type: ignore[attr-defined]
             + '_hand_markers.csv'
         )
 
@@ -348,8 +357,8 @@ class GripApertureRedux(klibs.Experiment):
             'exp_condition': P.condition,
             'task_type': self.block_task,
             'target_loc': self.target_loc,  # type: ignore[attr-defined]
-            'target_size': self.target_size,  # type: ignore[attr-defined]
-            'distractor_size': self.distractor_size,  # type: ignore[attr-defined]
+            'target_orientation': self.target_orientation,  # type: ignore[attr-defined]
+            'distractor_orientation': self.distractor_orientation,  # type: ignore[attr-defined]
             'go_signal_onset': go_signal_onset_time,
             'distance_threshold': (
                 self.reach_threshold if self.block_task == 'GBYK' else 'NA'
@@ -396,10 +405,10 @@ class GripApertureRedux(klibs.Experiment):
                 location=[P.screen_c[0], P.screen_c[1] // 3],  # type: ignore[attr-defined]
             )
 
-        distractor_holder = self.placeholders[DISTRACTOR][self.distractor_size]  # type: ignore[attr-defined]
+        distractor_holder = self.placeholders[DISTRACTOR][self.distractor_orientation]  # type: ignore[attr-defined]
         distractor_holder.fill = GRUE
 
-        target_holder = self.placeholders[TARGET][self.target_size]  # type: ignore[attr-defined]
+        target_holder = self.placeholders[TARGET][self.target_orientation]  # type: ignore[attr-defined]
         target_holder.fill = WHITE if target else GRUE
 
         blit(
