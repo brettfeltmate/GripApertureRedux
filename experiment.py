@@ -70,10 +70,10 @@ class GripApertureRedux(klibs.Experiment):
 
         # sizings
         self.px_cm = int(P.ppi / 2.54)
-        PX_WIDE = P.cm_wide * self.px_cm
-        PX_TALL = P.cm_tall * self.px_cm
-        PX_BRIM = P.cm_brim * self.px_cm
-        PX_OFFSET = P.cm_offset * self.px_cm
+        PX_WIDE = P.cm_wide * self.px_cm    # type: ignore[known-attribute]
+        PX_TALL = P.cm_tall * self.px_cm    # type: ignore[known-attribute]
+        PX_BRIM = P.cm_brim * self.px_cm    # type: ignore[known-attribute]
+        PX_OFFSET = P.cm_offset * self.px_cm   # type: ignore[known-attribute]
 
         # for working with streamed motion capture data
         self.ot = OptiTracker(marker_count=10, sample_rate=120, window_size=5)
@@ -122,6 +122,51 @@ class GripApertureRedux(klibs.Experiment):
                     *self.sizes[TALL],
                     stroke=[STROKE_CENTER, PX_BRIM, GRUE],
                     fill=GRUE,
+                ),
+            },
+        }
+
+        self.pts = {
+            LEFT: {
+                WIDE: (
+                    (
+                        self.locs[LEFT][0] - self.sizes[WIDE][0] / 2,  # type: ignore[attr-defined, operation]
+                        self.locs[LEFT][1] - self.sizes[WIDE][1] / 2,  # type: ignore[attr-defined, operation]
+                    ),
+                    (
+                        self.locs[LEFT][0] + self.sizes[WIDE][0] / 2,  # type: ignore[attr-defined, operation]
+                        self.locs[LEFT][1] + self.sizes[WIDE][1] / 2,  # type: ignore[attr-defined, operation]
+                    ),
+                ),
+                TALL: (
+                    (
+                        self.locs[LEFT][0] - self.sizes[TALL][0] / 2,  # type: ignore[attr-defined, operation]
+                        self.locs[LEFT][1] - self.sizes[TALL][1] / 2,  # type: ignore[attr-defined, operation]
+                    )(
+                        self.locs[LEFT][0] + self.sizes[TALL][0] / 2,  # type: ignore[attr-defined, operation]
+                        self.locs[LEFT][1] + self.sizes[TALL][1] / 2,  # type: ignore[attr-defined, operation]
+                    ),
+                ),
+            },
+            RIGHT: {
+                WIDE: (
+                    (
+                        self.locs[RIGHT][0] - self.sizes[WIDE][0] / 2,  # type: ignore[attr-defined, operation]
+                        self.locs[RIGHT][1] - self.sizes[WIDE][1] / 2,  # type: ignore[attr-defined, operation]
+                    ),
+                    (
+                        self.locs[RIGHT][0] + self.sizes[WIDE][0] / 2,  # type: ignore[attr-defined, operation]
+                        self.locs[RIGHT][1] + self.sizes[WIDE][1] / 2,  # type: ignore[attr-defined, operation]
+                    ),
+                ),
+                TALL: (
+                    (
+                        self.locs[RIGHT][0] - self.sizes[TALL][0] / 2,  # type: ignore[attr-defined, operation]
+                        self.locs[RIGHT][1] - self.sizes[TALL][1] / 2,  # type: ignore[attr-defined, operation]
+                    )(
+                        self.locs[RIGHT][0] + self.sizes[TALL][0] / 2,  # type: ignore[attr-defined, operation]
+                        self.locs[RIGHT][1] + self.sizes[TALL][1] / 2,  # type: ignore[attr-defined, operation]
+                    ),
                 ),
             },
         }
@@ -209,22 +254,17 @@ class GripApertureRedux(klibs.Experiment):
         # determine targ/dist locations
         self.distractor_loc = LEFT if self.target_loc == RIGHT else RIGHT  # type: ignore[attr-defined]
 
-        target_pts = (
-            self.locs[self.target_loc][0] - self.orientations[self.target_orientation][0] / 2,  # type: ignore[attr-defined, operation]
-            self.locs[self.target_loc][1]  # type: ignore[attr-defined, operation]
-            - self.orientations[self.target_orientation][1] / 2,  # type: ignore[attr-defined, operation]
-        )
-        distractor_pts = (
-            self.locs[self.distractor_loc][0] - self.orientations[self.distractor_orientation][0] / 2,  # type: ignore[attr-defined, operation]
-            self.locs[self.distractor_loc][1]  # type: ignore[attr-defined, operation]
-            - self.orientations[self.distractor_orientation][1] / 2,  # type: ignore[attr-defined, operation]
-        )  # type: ignore[attr-defined]
-
         # if hand position falls within one of these, presume object within it has been grasped
-        self.target_boundary = RectangleBoundary(label=TARGET, *target_pts)
+        self.target_boundary = RectangleBoundary(
+            label=TARGET,
+            p1=self.pts[self.target_loc][self.target_orientation][0],  # type: ignore[attr-defined]
+            p2=self.pts[self.target_loc][self.target_orientation][1],  # type: ignore[attr-defined]
+        )
 
         self.distractor_boundary = RectangleBoundary(
-            label=DISTRACTOR, *target_pts
+            label=DISTRACTOR,
+            p1=self.pts[self.distractor_loc][self.distractor_orientation][0],  # type: ignore[attr-defined]
+            p2=self.pts[self.distractor_loc][self.distractor_orientation][1],  # type: ignore[attr-defined]
         )
 
         self.bounds = BoundarySet(
