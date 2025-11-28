@@ -61,19 +61,31 @@ TARGET = 'target'
 DISTRACTOR = 'distractor'
 GBYK = 'GBYK'
 KBYG = 'KBYG'
+GO_SIGNAL = 'go_signal'
+REACH_WINDOW_CLOSED = 'reach_window_closed'
+TRIAL_TIMEOUT = 'trial_timeout'
+POS_X = 'pos_x'
+POS_Y = 'pos_y'
+POS_Z = 'pos_z'
+SPACE = 'space'
+PREMATURE_REACH = 'Premature reach'
+REACH_TIMEOUT = 'Reach timeout'
 OPEN = b'55'
 CLOSE = b'56'
+COMPORT = 'COM6'
+BAUDRATE = 9600
+NA = 'NA'
+HAND_MARKER_LABEL = 'hand'
 
 
 class GripApertureRedux(klibs.Experiment):
     def setup(self):
-
         # sizings
         self.px_cm = int(P.ppi / 2.54)
-        PX_WIDE = P.cm_wide * self.px_cm    # type: ignore[known-attribute]
-        PX_TALL = P.cm_tall * self.px_cm    # type: ignore[known-attribute]
-        PX_BRIM = P.cm_brim * self.px_cm    # type: ignore[known-attribute]
-        PX_OFFSET = P.cm_offset * self.px_cm   # type: ignore[known-attribute]
+        PX_WIDE = P.cm_wide * self.px_cm  # type: ignore[known-attribute]
+        PX_TALL = P.cm_tall * self.px_cm  # type: ignore[known-attribute]
+        PX_BRIM = P.cm_brim * self.px_cm  # type: ignore[known-attribute]
+        PX_OFFSET = P.cm_offset * self.px_cm  # type: ignore[known-attribute]
 
         # for working with streamed motion capture data
         self.ot = OptiTracker(marker_count=10, sample_rate=120, window_size=5)
@@ -85,7 +97,7 @@ class GripApertureRedux(klibs.Experiment):
         self.nnc.markers_listener = self.marker_set_listener
 
         # plato goggles controller
-        self.goggles = serial.Serial(port='COM6', baudrate=9600)
+        self.goggles = serial.Serial(port=COMPORT, baudrate=BAUDRATE)
 
         # 12cm between placeholder centers
         self.locs = {
@@ -100,75 +112,27 @@ class GripApertureRedux(klibs.Experiment):
 
         # spawn object placeholders
         self.placeholders = {
-            TARGET: {
-                WIDE: kld.Rectangle(
-                    *self.sizes[WIDE],
-                    stroke=[STROKE_CENTER, PX_BRIM, WHITE],
-                    fill=WHITE,
-                ),
-                TALL: kld.Rectangle(
-                    *self.sizes[TALL],
-                    stroke=[STROKE_CENTER, PX_BRIM, WHITE],
-                    fill=WHITE,
-                ),
-            },
-            DISTRACTOR: {
-                WIDE: kld.Rectangle(
-                    *self.sizes[WIDE],
-                    stroke=[STROKE_CENTER, PX_BRIM, GRUE],
-                    fill=GRUE,
-                ),
-                TALL: kld.Rectangle(
-                    *self.sizes[TALL],
-                    stroke=[STROKE_CENTER, PX_BRIM, GRUE],
-                    fill=GRUE,
-                ),
-            },
+            item: {
+                shape: kld.Rectangle(
+                    *self.sizes[shape],
+                    stroke=[
+                        STROKE_CENTER,
+                        PX_BRIM,
+                        WHITE if item == TARGET else GRUE,
+                    ],
+                    fill=WHITE if item == TARGET else GRUE,
+                )
+                for shape in (WIDE, TALL)
+            }
+            for item in (TARGET, DISTRACTOR)
         }
 
         self.pts = {
-            LEFT: {
-                WIDE: (
-                    (
-                        self.locs[LEFT][0] - self.sizes[WIDE][0] / 2,  # type: ignore[attr-defined, operation]
-                        self.locs[LEFT][1] - self.sizes[WIDE][1] / 2,  # type: ignore[attr-defined, operation]
-                    ),
-                    (
-                        self.locs[LEFT][0] + self.sizes[WIDE][0] / 2,  # type: ignore[attr-defined, operation]
-                        self.locs[LEFT][1] + self.sizes[WIDE][1] / 2,  # type: ignore[attr-defined, operation]
-                    ),
-                ),
-                TALL: (
-                    (
-                        self.locs[LEFT][0] - self.sizes[TALL][0] / 2,  # type: ignore[attr-defined, operation]
-                        self.locs[LEFT][1] - self.sizes[TALL][1] / 2,  # type: ignore[attr-defined, operation]
-                    )(
-                        self.locs[LEFT][0] + self.sizes[TALL][0] / 2,  # type: ignore[attr-defined, operation]
-                        self.locs[LEFT][1] + self.sizes[TALL][1] / 2,  # type: ignore[attr-defined, operation]
-                    ),
-                ),
-            },
-            RIGHT: {
-                WIDE: (
-                    (
-                        self.locs[RIGHT][0] - self.sizes[WIDE][0] / 2,  # type: ignore[attr-defined, operation]
-                        self.locs[RIGHT][1] - self.sizes[WIDE][1] / 2,  # type: ignore[attr-defined, operation]
-                    ),
-                    (
-                        self.locs[RIGHT][0] + self.sizes[WIDE][0] / 2,  # type: ignore[attr-defined, operation]
-                        self.locs[RIGHT][1] + self.sizes[WIDE][1] / 2,  # type: ignore[attr-defined, operation]
-                    ),
-                ),
-                TALL: (
-                    (
-                        self.locs[RIGHT][0] - self.sizes[TALL][0] / 2,  # type: ignore[attr-defined, operation]
-                        self.locs[RIGHT][1] - self.sizes[TALL][1] / 2,  # type: ignore[attr-defined, operation]
-                    )(
-                        self.locs[RIGHT][0] + self.sizes[TALL][0] / 2,  # type: ignore[attr-defined, operation]
-                        self.locs[RIGHT][1] + self.sizes[TALL][1] / 2,  # type: ignore[attr-defined, operation]
-                    ),
-                ),
-            },
+            side: {
+                shape: self.calc_bounds(self.locs[side], self.sizes[shape])
+                for shape in (WIDE, TALL)
+            }
+            for side in (LEFT, RIGHT)
         }
 
         # spawn go signal
@@ -180,7 +144,8 @@ class GripApertureRedux(klibs.Experiment):
         if P.run_practice_blocks:
             self.block_sequence = [GBYK, GBYK, KBYG, KBYG]  # type: ignore[attr-defined]
             self.insert_practice_block(
-                block_nums=[1, 3], trial_counts=P.trials_per_practice_block  # type: ignore[attr-defined]
+                block_nums=[1, 3],
+                trial_counts=P.trials_per_practice_block,  # type: ignore[attr-defined]
             )
         else:
             self.block_sequence = P.task_order  # type: ignore[attr-defined]
@@ -199,7 +164,6 @@ class GripApertureRedux(klibs.Experiment):
             os.mkdir(f'OptiData/{P.condition}/{P.p_id}/practice')
 
     def block(self):
-
         self.block_task = self.block_sequence.pop(0)
 
         self.block_dir = f'OptiData/{P.condition}/{P.p_id}'
@@ -232,7 +196,6 @@ class GripApertureRedux(klibs.Experiment):
         any_key()
 
     def trial_prep(self):
-
         # when to label a reach as being in-progress
         self.reach_threshold = randrange(*GBYK_DISTANCE_THRESHOLD, step=10)
 
@@ -241,14 +204,14 @@ class GripApertureRedux(klibs.Experiment):
             label='go_signal', onset=randrange(*GO_SIGNAL_ONSET)
         )
         self.evm.add_event(
-            label='reach_window_closed',
+            label=REACH_WINDOW_CLOSED,
             onset=REACH_WINDOW_POST_GO_SIGNAL,
-            after='go_signal',
+            after=GO_SIGNAL,
         )
         self.evm.add_event(
-            label='trial_timeout',
+            label=TRIAL_TIMEOUT,
             onset=POST_REACH_WINDOW,
-            after='reach_window_closed',
+            after=REACH_WINDOW_CLOSED,
         )
 
         # determine targ/dist locations
@@ -277,7 +240,7 @@ class GripApertureRedux(klibs.Experiment):
 
         while True:  # participant readiness signalled by keypress
             q = pump(True)
-            if key_pressed(key='space', queue=q):
+            if key_pressed(key=SPACE, queue=q):
                 break
 
         self.present_stimuli()  # reset display
@@ -306,11 +269,11 @@ class GripApertureRedux(klibs.Experiment):
         # control flags
         self.rt = None
         self.mt = None
-        self.target_onset_time = 'NA'
+        self.target_onset_time = NA
         self.target_visible = False
         self.object_grasped = None
 
-        if self.block_task == 'KBYG':
+        if self.block_task == KBYG:
             # target is immediately available
             self.present_stimuli(target=True)
             self.target_visible = True
@@ -318,15 +281,15 @@ class GripApertureRedux(klibs.Experiment):
         # reference point to determine if/when to present targets in GBYK trials
         start_pos = self.ot.position()
         start_pos = (
-            start_pos['pos_x'][0].item() * self.px_cm,
-            start_pos['pos_z'][0].item() * self.px_cm,
+            start_pos[POS_X][0].item() * self.px_cm,
+            start_pos[POS_Z][0].item() * self.px_cm,
         )
 
         # restrict movement until go signal received
-        while self.evm.before('go_signal'):
+        while self.evm.before(GO_SIGNAL):
             _ = ui_request()
-            if get_key_state('space') == 0:
-                self.abort_trial('Premature reach')
+            if get_key_state(SPACE) == 0:
+                self.abort_trial(PREMATURE_REACH)
 
         # used to calculate RT, also logged for analysis purposes
         go_signal_onset_time = self.evm.trial_time_ms
@@ -335,7 +298,7 @@ class GripApertureRedux(klibs.Experiment):
         self.goggles.write(OPEN)
 
         # monitor movement status following go-signal
-        while self.evm.before('reach_window_closed'):
+        while self.evm.before(REACH_WINDOW_CLOSED):
             _ = ui_request()
 
             # key release indicates reach is in motion
@@ -348,13 +311,12 @@ class GripApertureRedux(klibs.Experiment):
             else:
                 curr_pos = self.ot.position()
                 curr_pos = (
-                    curr_pos['pos_x'][0].item() * self.px_cm,
-                    curr_pos['pos_z'][0].item() * self.px_cm,
+                    curr_pos[POS_X][0].item() * self.px_cm,
+                    curr_pos[POS_Z][0].item() * self.px_cm,
                 )
 
                 # In GBYK blocks, present target once reach exceeds distance threshold
                 if not self.target_visible:
-
                     if (
                         line_segment_len(start_pos, curr_pos)
                         > self.reach_threshold
@@ -382,12 +344,12 @@ class GripApertureRedux(klibs.Experiment):
 
         # if reach window closes before object is grasped, trial is aborted
         if self.object_grasped is None:
-            self.abort_trial('Reach timeout')
+            self.abort_trial(REACH_TIMEOUT)
 
         clear()
 
         # Don't lock up system while waiting for trial to end
-        while self.evm.before('trial_timeout'):
+        while self.evm.before(TRIAL_TIMEOUT):
             _ = ui_request()
 
         return {
@@ -401,7 +363,7 @@ class GripApertureRedux(klibs.Experiment):
             'distractor_orientation': self.distractor_orientation,  # type: ignore[attr-defined]
             'go_signal_onset': go_signal_onset_time,
             'distance_threshold': (
-                self.reach_threshold if self.block_task == 'GBYK' else 'NA'
+                self.reach_threshold if self.block_task == GBYK else NA
             ),
             'target_onset': self.target_onset_time,
             'response_time': self.rt,
@@ -417,8 +379,8 @@ class GripApertureRedux(klibs.Experiment):
 
     def abort_trial(self, err=''):
         msgs = {
-            'Premature reach': 'Please wait for the go signal.',
-            'Reach timeout': 'Too slow!',
+            PREMATURE_REACH: 'Please wait for the go signal.',
+            REACH_TIMEOUT: 'Too slow!',
         }
 
         self.goggles.write(OPEN)
@@ -468,7 +430,7 @@ class GripApertureRedux(klibs.Experiment):
                 Expected format: {'markers': [{'key1': val1, ...}, ...]}
         """
 
-        if marker_set.get('label') == 'hand':
+        if marker_set.get('label') == HAND_MARKER_LABEL:
             # Append data to trial-specific CSV file
             fname = self.ot.data_dir
             header = list(marker_set['markers'][0].keys())
@@ -485,3 +447,9 @@ class GripApertureRedux(klibs.Experiment):
                 for marker in marker_set.get('markers', {}):
                     if marker:
                         writer.writerow(marker)
+
+    def calc_bounds(self, loc, size):
+        return (
+            (loc[0] - size[0] / 2, loc[1] - size[1] / 2),  # type: ignore[attr-defined, operation]
+            (loc[0] + size[0] / 2, loc[1] + size[1] / 2),  # type: ignore[attr-defined, operation]
+        )
