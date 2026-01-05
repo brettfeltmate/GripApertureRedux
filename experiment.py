@@ -7,13 +7,14 @@ import os
 from csv import DictWriter
 from random import randrange
 
+
 # local imports
 from get_key_state import get_key_state  # type: ignore[import]
 
 import klibs
 from klibs import P
 from klibs.KLAudio import Tone
-from klibs.KLConstants import STROKE_CENTER
+from klibs.KLConstants import STROKE_CENTER, STROKE_INNER
 from klibs.KLCommunication import message
 from klibs.KLExceptions import TrialException
 from klibs.KLGraphics import KLDraw as kld
@@ -126,6 +127,14 @@ class GripApertureRedux(klibs.Experiment):
             }
             for item in (TARGET, DISTRACTOR)
         }
+
+        if P.development_mode:
+            self.cursor = kld.Annulus(
+                self.px_cm * 2,
+                self.px_cm // 5,
+                stroke=[STROKE_INNER, self.px_cm // 10, RED],
+                fill=RED,
+            )
 
         self.pts = {
             side: {
@@ -401,6 +410,18 @@ class GripApertureRedux(klibs.Experiment):
     def present_stimuli(self, prep=False, target=False):
         fill()
 
+        if P.development_mode:
+            hand_marker = self.ot.position()
+            hand_pos = (
+                hand_marker[POS_X][0].item() * self.px_cm,
+                hand_marker[POS_Z][0].item() * self.px_cm,
+            )
+            blit(
+                kld.Circle(10, stroke=[STROKE_CENTER, 2, RED], fill=RED),
+                registration=5,
+                location=hand_pos,
+            )
+
         if prep:
             message(
                 'Place props within size-matched rings.\n\nKeypress to start trial.',
@@ -448,8 +469,8 @@ class GripApertureRedux(klibs.Experiment):
                     if marker is not None:
                         writer.writerow(marker)
 
-    def calc_bounds(self, loc, size):
+    def calc_bounds(self, loc, size, extend=1.5):
         return (
-            (loc[0] - size[0] / 2, loc[1] - size[1] / 2),  # type: ignore[attr-defined, operation]
-            (loc[0] + size[0] / 2, loc[1] + size[1] / 2),  # type: ignore[attr-defined, operation]
+            (loc[0] - size[0] / 2, loc[1] - size[1] / 2) + (extend * self.px_cm),  # type: ignore[attr-defined, operation]
+            (loc[0] + size[0] / 2, loc[1] + size[1] / 2) + (extend * self.px_cm),  # type: ignore[attr-defined, operation]
         )
