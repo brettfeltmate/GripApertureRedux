@@ -417,7 +417,7 @@ class GripApertureRedux(klibs.Experiment):
                 hand_marker[POS_Z][0].item() * self.px_cm,
             )
             blit(
-                kld.Circle(10, stroke=[STROKE_CENTER, 2, RED], fill=RED),
+                self.cursor,
                 registration=5,
                 location=hand_pos,
             )
@@ -470,7 +470,14 @@ class GripApertureRedux(klibs.Experiment):
                         writer.writerow(marker)
 
     def calc_bounds(self, loc, size, extend=1.5):
+        padding = extend * self.px_cm
         return (
-            (loc[0] - size[0] / 2, loc[1] - size[1] / 2) + (extend * self.px_cm),  # type: ignore[attr-defined, operation]
-            (loc[0] + size[0] / 2, loc[1] + size[1] / 2) + (extend * self.px_cm),  # type: ignore[attr-defined, operation]
+            (
+                (loc[0] - size[0] / 2) + padding,
+                (loc[1] - size[1] / 2) + padding
+            ),
+            (
+                (loc[0] + size[0] / 2) + padding,
+                (loc[1] + size[1] / 2) + padding
+            )
         )
