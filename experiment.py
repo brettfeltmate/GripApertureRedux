@@ -117,9 +117,9 @@ class GripApertureRedux(klibs.Experiment):
                 shape: kld.Rectangle(
                     *self.sizes[shape],
                     stroke=[
-                        STROKE_CENTER,
                         PX_BRIM,
                         WHITE if item == TARGET else GRUE,
+                        STROKE_CENTER
                     ],
                     fill=WHITE if item == TARGET else GRUE,
                 )
@@ -132,6 +132,7 @@ class GripApertureRedux(klibs.Experiment):
             self.cursor = kld.Annulus(
                 self.px_cm * 2,
                 self.px_cm // 5,
+                stroke=[ self.px_cm // 10, RED, STROKE_INNER],
                 fill=RED,
             )
 
