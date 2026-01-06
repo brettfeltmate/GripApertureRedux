@@ -132,7 +132,6 @@ class GripApertureRedux(klibs.Experiment):
             self.cursor = kld.Annulus(
                 self.px_cm * 2,
                 self.px_cm // 5,
-                stroke=[STROKE_INNER, self.px_cm // 10, RED],
                 fill=RED,
             )
 
