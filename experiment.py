@@ -5,6 +5,7 @@ __author__ = 'Brett Feltmate'
 # external imports
 import os
 from csv import DictWriter
+from datetime import datetime
 from random import randrange
 
 
@@ -28,27 +29,7 @@ from natnetclient_rough import NatNetClient  # type: ignore[import]
 from OptiTracker import OptiTracker  # type: ignore[import]
 from pyfirmata import serial  # type: ignore[import]
 
-# experiment constants
-
-# timings
-GO_SIGNAL_ONSET = (500, 2000)
-# TODO: Make this relative to rt
-REACH_WINDOW_POST_GO_SIGNAL = 1000
-POST_REACH_WINDOW = 1000
-GBYK_DISTANCE_THRESHOLD = (
-    50,
-    100,
-)  # these two determine when to present target
-GBYK_TIMING_THRESHOLD = 0.2  # NOTE: this is in seconds, not ms
-
-# audio
-TONE_DURATION = 100
-TONE_SHAPE = 'sine'
-TONE_FREQ = 784  # ridin' on yo G5 airplane
-TONE_VOLUME = 1.0
-
-
-# fills
+# colour fills
 WHITE = (255, 255, 255, 255)
 GRUE = (90, 90, 96, 255)
 RED = (255, 0, 0, 255)
@@ -83,10 +64,11 @@ class GripApertureRedux(klibs.Experiment):
     def setup(self):
         # sizings
         self.px_cm = int(P.ppi / 2.54)
-        PX_WIDE = P.cm_wide * self.px_cm  # type: ignore[known-attribute]
-        PX_TALL = P.cm_tall * self.px_cm  # type: ignore[known-attribute]
-        PX_BRIM = P.cm_brim * self.px_cm  # type: ignore[known-attribute]
-        PX_OFFSET = P.cm_offset * self.px_cm  # type: ignore[known-attribute]
+
+        px_wide = P.cm_wide * self.px_cm  # type: ignore[known-attribute]
+        px_tall = P.cm_tall * self.px_cm  # type: ignore[known-attribute]
+        px_brim = P.cm_brim * self.px_cm  # type: ignore[known-attribute]
+        px_offset = P.cm_offset * self.px_cm  # type: ignore[known-attribute]
 
         # for working with streamed motion capture data
         self.ot = OptiTracker(marker_count=10, sample_rate=120, window_size=5)
@@ -102,13 +84,13 @@ class GripApertureRedux(klibs.Experiment):
 
         # 12cm between placeholder centers
         self.locs = {
-            LEFT: (P.screen_c[0] - PX_OFFSET, P.screen_c[1]),  # type: ignore[attr-defined]
-            RIGHT: (P.screen_c[0] + PX_OFFSET, P.screen_c[1]),  # type: ignore[attr-defined]
+            LEFT: (P.screen_c[0] - px_offset, P.screen_c[1]),
+            RIGHT: (P.screen_c[0] + px_offset, P.screen_c[1]),
         }
 
         self.sizes = {
-            WIDE: (PX_WIDE, PX_TALL),
-            TALL: (PX_TALL, PX_WIDE),
+            WIDE: (px_wide, px_tall),
+            TALL: (px_tall, px_wide),
         }
 
         # spawn object placeholders
@@ -117,9 +99,9 @@ class GripApertureRedux(klibs.Experiment):
                 shape: kld.Rectangle(
                     *self.sizes[shape],
                     stroke=[
-                        PX_BRIM,
+                        px_brim,
                         WHITE if item == TARGET else GRUE,
-                        STROKE_CENTER
+                        STROKE_CENTER,
                     ],
                     fill=WHITE if item == TARGET else GRUE,
                 )
@@ -132,7 +114,7 @@ class GripApertureRedux(klibs.Experiment):
             self.cursor = kld.Annulus(
                 self.px_cm * 2,
                 self.px_cm // 5,
-                stroke=[ self.px_cm // 10, RED, STROKE_INNER],
+                stroke=[self.px_cm // 10, RED, STROKE_INNER],
                 fill=RED,
             )
 
@@ -146,12 +128,12 @@ class GripApertureRedux(klibs.Experiment):
 
         # spawn go signal
         self.go_signal = Tone(
-            TONE_DURATION, TONE_SHAPE, TONE_FREQ, TONE_VOLUME
+            P.tone_duration, P.tone_shape, P.tone_freq, P.tone_volume  # type: ignore[attr-defined]
         )
 
         # inject practice blocks into fixed block sequence
         if P.run_practice_blocks:
-            self.block_sequence = [GBYK, GBYK, KBYG, KBYG]  # type: ignore[attr-defined]
+            self.block_sequence = [GBYK, GBYK, KBYG, KBYG]
             self.insert_practice_block(
                 block_nums=[1, 3],
                 trial_counts=P.trials_per_practice_block,  # type: ignore[attr-defined]
@@ -160,24 +142,21 @@ class GripApertureRedux(klibs.Experiment):
             self.block_sequence = P.task_order  # type: ignore[attr-defined]
 
         # where motion capture data is stored
-        if not os.path.exists('OptiData'):
-            os.mkdir('OptiData')
-
-        if not os.path.exists(f'OptiData/{P.condition}'):
-            os.mkdir(f'OptiData/{P.condition}')
-
-        os.mkdir(f'OptiData/{P.condition}/{P.p_id}')
-        os.mkdir(f'OptiData/{P.condition}/{P.p_id}/testing')
+        self._ensure_dir_exists(P.opti_data_dir)  # type: ignore[attr-defined]
+        participant_dir = self._get_participant_base_dir()
+        self._ensure_dir_exists(participant_dir)
+        self._ensure_dir_exists(os.path.join(participant_dir, 'testing'))
 
         if P.run_practice_blocks:
-            os.mkdir(f'OptiData/{P.condition}/{P.p_id}/practice')
+            self._ensure_dir_exists(os.path.join(participant_dir, 'practice'))
 
     def block(self):
         self.block_task = self.block_sequence.pop(0)
 
-        self.block_dir = f'OptiData/{P.condition}/{P.p_id}'
-        self.block_dir += '/practice' if P.practicing else '/testing'
-        self.block_dir += f'/{self.block_task}'
+        participant_dir = self._get_participant_base_dir()
+        self.block_dir = self._get_block_dir_path(
+            participant_dir, P.practicing, self.block_task
+        )
 
         # data directories are (or should be) unique to individuals
         if os.path.exists(self.block_dir):
@@ -185,7 +164,7 @@ class GripApertureRedux(klibs.Experiment):
                 f'Data directory already exists at {self.block_dir}'
             )
         else:
-            os.mkdir(self.block_dir)
+            self._ensure_dir_exists(self.block_dir)
 
         # TODO: Proper instructions
         instrux = (
@@ -206,20 +185,22 @@ class GripApertureRedux(klibs.Experiment):
 
     def trial_prep(self):
         # when to label a reach as being in-progress
-        self.reach_threshold = randrange(*GBYK_DISTANCE_THRESHOLD, step=10)
+        self.reach_threshold = randrange(
+            *P.gbyk_distance_threshold, step=10  # type: ignore[known-attribute]
+        )
 
         # event timings
         self.evm.add_event(
-            label='go_signal', onset=randrange(*GO_SIGNAL_ONSET)
+            label='go_signal', onset=randrange(*P.go_signal_onset)  # type: ignore[known-attribute]
         )
         self.evm.add_event(
             label=REACH_WINDOW_CLOSED,
-            onset=REACH_WINDOW_POST_GO_SIGNAL,
+            onset=P.reach_window_post_go_signal,  # type: ignore[known-attribute]
             after=GO_SIGNAL,
         )
         self.evm.add_event(
             label=TRIAL_TIMEOUT,
-            onset=POST_REACH_WINDOW,
+            onset=P.post_reach_window,  # type: ignore[known-attribute]
             after=REACH_WINDOW_CLOSED,
         )
 
@@ -255,25 +236,24 @@ class GripApertureRedux(klibs.Experiment):
         self.present_stimuli()  # reset display
 
         # touch datafile for present trial
-        self.ot.data_dir = (
-            f'{self.block_dir}/'
-            + f'trial_{P.trial_number}'
-            + f'_targetOn_{self.target_loc}'  # type: ignore[attr-defined]
-            + f'_targetOrientation_{self.target_orientation}'  # type: ignore[attr-defined]
-            + f'_distractorOrientation_{self.distractor_orientation}'  # type: ignore[attr-defined]
-            + '_hand_markers.csv'
+        self.ot.data_dir = self._get_trial_filename(
+            self.block_dir,
+            P.trial_number,
+            self.target_loc,  # type: ignore[attr-defined]
+            self.target_orientation,  # type: ignore[attr-defined]
+            self.distractor_orientation,  # type: ignore[attr-defined]
         )
 
         self.nnc.startup()  # start marker tracking
 
         # sometimes datafile is queried before being created, give headstart
-        # FIXME: why tho
-        nnc_lead_time = CountDown(0.034)
-        while nnc_lead_time.counting():
-            _ = ui_request()
+        smart_sleep(100)  # ms
 
     def trial(self):  # type: ignore[override]
         hide_mouse_cursor()
+
+        # Validate trial data file exists and contains data
+        self._validate_trial_data_file(self.ot.data_dir)
 
         # control flags
         self.rt = None
@@ -474,10 +454,64 @@ class GripApertureRedux(klibs.Experiment):
         return (
             (
                 (loc[0] - size[0] / 2) + padding,
-                (loc[1] - size[1] / 2) + padding
+                (loc[1] - size[1] / 2) + padding,
             ),
             (
                 (loc[0] + size[0] / 2) + padding,
-                (loc[1] + size[1] / 2) + padding
-            )
+                (loc[1] + size[1] / 2) + padding,
+            ),
         )
+
+    def _ensure_dir_exists(self, path):
+        """Create directory if it doesn't exist. Raises exception on failure."""
+        try:
+            os.makedirs(path, exist_ok=True)
+        except OSError as e:
+            raise OSError(f"Failed to create directory '{path}': {e}")
+
+    def _get_participant_base_dir(self):
+        """Get base directory path for current participant."""
+        if P.development_mode:
+            # Use 999 with datetime suffix for unique dev directories
+            datetime_suffix = datetime.now().strftime('%m%d_%H%M')
+            p_id = f'999_{datetime_suffix}'
+        else:
+            p_id = str(P.p_id)
+        return os.path.join(
+            P.opti_data_dir, p_id  # type: ignore[known-attribute]
+        )
+
+    def _get_block_dir_path(self, participant_dir, is_practice, block_task):
+        """Construct block directory path."""
+        phase = 'practice' if is_practice else 'testing'
+        return os.path.join(participant_dir, phase, block_task)
+
+    def _get_trial_filename(
+        self,
+        block_dir,
+        trial_num,
+        target_loc,
+        target_orient,
+        distractor_orient,
+    ):
+        """Construct trial data filename."""
+        filename = f'trial_{trial_num}_targetOn_{target_loc}_targetOrientation_{target_orient}_distractorOrientation_{distractor_orient}_hand_markers.csv'
+        return os.path.join(block_dir, filename)
+
+    def _validate_trial_data_file(self, filepath):
+        """Validate that trial data file exists and contains data. Raises exception if not."""
+        if not os.path.exists(filepath):
+            raise FileNotFoundError(
+                f'Trial data file does not exist: {filepath}'
+            )
+
+        try:
+            with open(filepath, 'r') as f:
+                lines = f.readlines()
+                # Should have at least header + some data lines
+                if len(lines) < 6:
+                    raise ValueError(
+                        f'OptiData file at \n\t{filepath}\nis sparser than expected, with only {len(lines)} lines.'
+                    )
+        except IOError as e:
+            raise IOError(f'Cannot read trial data file: {filepath} - {e}')

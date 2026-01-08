@@ -74,3 +74,21 @@ cm_wide = 5
 cm_tall = 9
 cm_brim = 1
 cm_offset = 10
+
+# TODO: Make this relative to rt
+reach_window_post_go_signal = 1000
+go_signal_onset = (500, 2000)
+post_reach_window = 1000
+gbyk_distance_threshold = (
+    50,
+    100,
+)  # these two determine when to present target
+gbyk_timing_threshold = 0.2  # NOTE: this is in seconds, not ms
+
+# audio
+tone_duration = 100
+tone_shape = 'sine'
+tone_freq = 784  # ridin' on yo G5 airplane
+tone_volume = 1.0
+
+opti_data_dir = 'OptiData'
