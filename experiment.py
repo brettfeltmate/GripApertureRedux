@@ -246,8 +246,8 @@ class GripApertureRedux(klibs.Experiment):
 
         self.nnc.startup()  # start marker tracking
 
-        # sometimes datafile is queried before being created, give headstart
-        smart_sleep(100)  # ms
+        # ensure some data exists before beginning trial
+        smart_sleep(P.opti_trial_lead_time)  # type: ignore[attr-defined]
 
     def trial(self):  # type: ignore[override]
         hide_mouse_cursor()
@@ -268,11 +268,7 @@ class GripApertureRedux(klibs.Experiment):
             self.target_visible = True
 
         # reference point to determine if/when to present targets in GBYK trials
-        start_pos = self.ot.position()
-        start_pos = (
-            start_pos[POS_X][0].item() * self.px_cm,
-            start_pos[POS_Z][0].item() * self.px_cm,
-        )
+        start_pos = self.get_hand_pos()
 
         # restrict movement until go signal received
         while self.evm.before(GO_SIGNAL):
@@ -298,11 +294,7 @@ class GripApertureRedux(klibs.Experiment):
 
             # Whilst reach in motion
             else:
-                curr_pos = self.ot.position()
-                curr_pos = (
-                    curr_pos[POS_X][0].item() * self.px_cm,
-                    curr_pos[POS_Z][0].item() * self.px_cm,
-                )
+                curr_pos = self.get_hand_pos()
 
                 # In GBYK blocks, present target once reach exceeds distance threshold
                 if not self.target_visible:
@@ -324,8 +316,7 @@ class GripApertureRedux(klibs.Experiment):
 
                     timeout = CountDown(0.3)
                     while timeout.counting():
-                        q = pump(True)
-                        _ = ui_request(queue=q)
+                        smart_sleep(10)
 
                     self.nnc.shutdown()
                     # time from button release to object grasped
@@ -365,6 +356,14 @@ class GripApertureRedux(klibs.Experiment):
 
     def clean_up(self):
         pass
+
+    def get_hand_pos(self):
+        hand_marker = self.ot.position()
+        hand_pos = (
+            hand_marker[POS_X][0].item() * self.px_cm,
+            hand_marker[POS_Z][0].item() * self.px_cm,
+        )
+        return hand_pos
 
     def abort_trial(self, err=''):
         msgs = {

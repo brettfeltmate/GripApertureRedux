@@ -92,3 +92,4 @@ tone_freq = 784  # ridin' on yo G5 airplane
 tone_volume = 1.0
 
 opti_data_dir = 'OptiData'
+opti_trial_lead_time = 100 # ms
