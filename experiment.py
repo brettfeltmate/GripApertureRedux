@@ -52,11 +52,12 @@ POS_Z = 'pos_z'
 SPACE = 'space'
 PREMATURE_REACH = 'Premature reach'
 REACH_TIMEOUT = 'Reach timeout'
+NA = 'NA'
+# TODO: these should be defined in _params.py
 OPEN = b'55'
 CLOSE = b'56'
 COMPORT = 'COM6'
 BAUDRATE = 9600
-NA = 'NA'
 HAND_MARKER_LABEL = 'hand'
 
 
@@ -233,8 +234,6 @@ class GripApertureRedux(klibs.Experiment):
             if key_pressed(key=SPACE, queue=q):
                 break
 
-        self.present_stimuli()  # reset display
-
         # touch datafile for present trial
         self.ot.data_dir = self._get_trial_filename(
             self.block_dir,
@@ -254,6 +253,8 @@ class GripApertureRedux(klibs.Experiment):
 
         # Validate trial data file exists and contains data
         self._validate_trial_data_file(self.ot.data_dir)
+
+        self.present_stimuli()
 
         # control flags
         self.rt = None
@@ -385,21 +386,18 @@ class GripApertureRedux(klibs.Experiment):
 
         raise TrialException(err)
 
+    def get_pos(self):
+        hand_marker = self.ot.position()
+        hand_pos = (
+            P.screen_x - (hand_marker[POS_X][0].item() * self.px_cm),
+            P.screen_y - (hand_marker[POS_Z][0].item() * self.px_cm),
+        )
+        print(f'hand_pos: {hand_pos}')
+        return hand_pos
+
     # conditionally present stimuli
     def present_stimuli(self, prep=False, target=False):
         fill()
-
-        if P.development_mode:
-            hand_marker = self.ot.position()
-            hand_pos = (
-                hand_marker[POS_X][0].item() * self.px_cm,
-                hand_marker[POS_Z][0].item() * self.px_cm,
-            )
-            blit(
-                self.cursor,
-                registration=5,
-                location=hand_pos,
-            )
 
         if prep:
             message(
@@ -419,6 +417,13 @@ class GripApertureRedux(klibs.Experiment):
             location=self.locs[self.distractor_loc],
         )
         blit(target_holder, registration=5, location=self.locs[self.target_loc])  # type: ignore[attr-defined]
+        if P.development_mode and not prep:
+            hand_pos = self.get_pos()
+            blit(
+                self.cursor,
+                registration=5,
+                location=hand_pos,
+            )
 
         flip()
 
@@ -495,7 +500,8 @@ class GripApertureRedux(klibs.Experiment):
         distractor_orient,
     ):
         """Construct trial data filename."""
-        filename = f'trial_{trial_num}_targetOn_{target_loc}_targetOrientation_{target_orient}_distractorOrientation_{distractor_orient}_hand_markers.csv'
+        # TODO: markup file with factor levels instead of shoehorning into filename
+        filename = f'trial_{trial_num}_tSide_{target_loc}_tShape{target_orient}_dShape_{distractor_orient}_markers.csv'
         return os.path.join(block_dir, filename)
 
     def _validate_trial_data_file(self, filepath):
