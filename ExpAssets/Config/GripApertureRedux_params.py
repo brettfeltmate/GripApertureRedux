@@ -92,4 +92,10 @@ tone_freq = 784  # ridin' on yo G5 airplane
 tone_volume = 1.0
 
 opti_data_dir = 'OptiData'
-opti_trial_lead_time = 100 # ms
+opti_trial_lead_time = 100   # ms
+
+plato_open_cmd = b'55'
+plato_close_cmd = b'56'
+arduino_comport = 'COM6'
+baudrate = 9600
+hand_marker_setname = 'hand'

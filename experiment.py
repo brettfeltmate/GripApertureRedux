@@ -53,12 +53,6 @@ SPACE = 'space'
 PREMATURE_REACH = 'Premature reach'
 REACH_TIMEOUT = 'Reach timeout'
 NA = 'NA'
-# TODO: these should be defined in _params.py
-OPEN = b'55'
-CLOSE = b'56'
-COMPORT = 'COM6'
-BAUDRATE = 9600
-HAND_MARKER_LABEL = 'hand'
 
 
 class GripApertureRedux(klibs.Experiment):
@@ -81,7 +75,7 @@ class GripApertureRedux(klibs.Experiment):
         self.nnc.markers_listener = self.marker_set_listener
 
         # plato goggles controller
-        self.goggles = serial.Serial(port=COMPORT, baudrate=BAUDRATE)
+        self.goggles = serial.Serial(port=P.arduino_comport, baudrate=P.baudrate)  # type: ignore[known-attribute]
 
         # 12cm between placeholder centers
         self.locs = {
@@ -129,7 +123,7 @@ class GripApertureRedux(klibs.Experiment):
 
         # spawn go signal
         self.go_signal = Tone(
-            P.tone_duration, P.tone_shape, P.tone_freq, P.tone_volume  # type: ignore[attr-defined]
+            P.tone_duration, P.tone_shape, P.tone_freq, P.tone_volume  # type: ignore[known-attribute]
         )
 
         # inject practice blocks into fixed block sequence
@@ -137,13 +131,13 @@ class GripApertureRedux(klibs.Experiment):
             self.block_sequence = [GBYK, GBYK, KBYG, KBYG]
             self.insert_practice_block(
                 block_nums=[1, 3],
-                trial_counts=P.trials_per_practice_block,  # type: ignore[attr-defined]
+                trial_counts=P.trials_per_practice_block,  # type: ignore[known-attribute]
             )
         else:
-            self.block_sequence = P.task_order  # type: ignore[attr-defined]
+            self.block_sequence = P.task_order  # type: ignore[known-attribute]
 
         # where motion capture data is stored
-        self._ensure_dir_exists(P.opti_data_dir)  # type: ignore[attr-defined]
+        self._ensure_dir_exists(P.opti_data_dir)  # type: ignore[known-attribute]
         participant_dir = self._get_participant_base_dir()
         self._ensure_dir_exists(participant_dir)
         self._ensure_dir_exists(os.path.join(participant_dir, 'testing'))
@@ -206,19 +200,19 @@ class GripApertureRedux(klibs.Experiment):
         )
 
         # determine targ/dist locations
-        self.distractor_loc = LEFT if self.target_loc == RIGHT else RIGHT  # type: ignore[attr-defined]
+        self.distractor_loc = LEFT if self.target_loc == RIGHT else RIGHT  # type: ignore[known-attribute]
 
         # if hand position falls within one of these, presume object within it has been grasped
         self.target_boundary = RectangleBoundary(
             label=TARGET,
-            p1=self.pts[self.target_loc][self.target_orientation][0],  # type: ignore[attr-defined]
-            p2=self.pts[self.target_loc][self.target_orientation][1],  # type: ignore[attr-defined]
+            p1=self.pts[self.target_loc][self.target_orientation][0],  # type: ignore[known-attribute]
+            p2=self.pts[self.target_loc][self.target_orientation][1],  # type: ignore[known-attribute]
         )
 
         self.distractor_boundary = RectangleBoundary(
             label=DISTRACTOR,
-            p1=self.pts[self.distractor_loc][self.distractor_orientation][0],  # type: ignore[attr-defined]
-            p2=self.pts[self.distractor_loc][self.distractor_orientation][1],  # type: ignore[attr-defined]
+            p1=self.pts[self.distractor_loc][self.distractor_orientation][0],  # type: ignore[known-attribute]
+            p2=self.pts[self.distractor_loc][self.distractor_orientation][1],  # type: ignore[known-attribute]
         )
 
         self.bounds = BoundarySet(
@@ -226,7 +220,7 @@ class GripApertureRedux(klibs.Experiment):
         )
 
         # blind participant during prop setup
-        self.goggles.write(CLOSE)
+        self.goggles.write(P.plato_close_cmd)  # type: ignore[known-attribute]
         self.present_stimuli(prep=True)
 
         while True:  # participant readiness signalled by keypress
@@ -238,15 +232,15 @@ class GripApertureRedux(klibs.Experiment):
         self.ot.data_dir = self._get_trial_filename(
             self.block_dir,
             P.trial_number,
-            self.target_loc,  # type: ignore[attr-defined]
-            self.target_orientation,  # type: ignore[attr-defined]
-            self.distractor_orientation,  # type: ignore[attr-defined]
+            self.target_loc,  # type: ignore[known-attribute]
+            self.target_orientation,  # type: ignore[known-attribute]
+            self.distractor_orientation,  # type: ignore[known-attribute]
         )
 
         self.nnc.startup()  # start marker tracking
 
         # ensure some data exists before beginning trial
-        smart_sleep(P.opti_trial_lead_time)  # type: ignore[attr-defined]
+        smart_sleep(P.opti_trial_lead_time)  # type: ignore[known-attribute]
 
     def trial(self):  # type: ignore[override]
         hide_mouse_cursor()
@@ -281,7 +275,7 @@ class GripApertureRedux(klibs.Experiment):
         go_signal_onset_time = self.evm.trial_time_ms
 
         self.go_signal.play()
-        self.goggles.write(OPEN)
+        self.goggles.write(P.plato_open_cmd)  # type: ignore[known-attribute]
 
         # monitor movement status following go-signal
         while self.evm.before(REACH_WINDOW_CLOSED):
@@ -339,9 +333,9 @@ class GripApertureRedux(klibs.Experiment):
             'practicing': P.practicing,
             'exp_condition': P.condition,
             'task_type': self.block_task,
-            'target_loc': self.target_loc,  # type: ignore[attr-defined]
-            'target_orientation': self.target_orientation,  # type: ignore[attr-defined]
-            'distractor_orientation': self.distractor_orientation,  # type: ignore[attr-defined]
+            'target_loc': self.target_loc,  # type: ignore[known-attribute]
+            'target_orientation': self.target_orientation,  # type: ignore[known-attribute]
+            'distractor_orientation': self.distractor_orientation,  # type: ignore[known-attribute]
             'go_signal_onset': go_signal_onset_time,
             'distance_threshold': (
                 self.reach_threshold if self.block_task == GBYK else NA
@@ -372,7 +366,7 @@ class GripApertureRedux(klibs.Experiment):
             REACH_TIMEOUT: 'Too slow!',
         }
 
-        self.goggles.write(OPEN)
+        self.goggles.write(P.plato_open_cmd)  # type: ignore[known-attribute]
         self.nnc.shutdown()
         os.remove(self.ot.data_dir)
 
@@ -402,13 +396,13 @@ class GripApertureRedux(klibs.Experiment):
         if prep:
             message(
                 'Place props within size-matched rings.\n\nKeypress to start trial.',
-                location=[P.screen_c[0], P.screen_c[1] // 3],  # type: ignore[attr-defined]
+                location=[P.screen_c[0], P.screen_c[1] // 3],  # type: ignore[known-attribute]
             )
 
-        distractor_holder = self.placeholders[DISTRACTOR][self.distractor_orientation]  # type: ignore[attr-defined]
+        distractor_holder = self.placeholders[DISTRACTOR][self.distractor_orientation]  # type: ignore[known-attribute]
         distractor_holder.fill = GRUE
 
-        target_holder = self.placeholders[TARGET][self.target_orientation]  # type: ignore[attr-defined]
+        target_holder = self.placeholders[TARGET][self.target_orientation]  # type: ignore[known-attribute]
         target_holder.fill = WHITE if target else GRUE
 
         blit(
@@ -416,7 +410,7 @@ class GripApertureRedux(klibs.Experiment):
             registration=5,
             location=self.locs[self.distractor_loc],
         )
-        blit(target_holder, registration=5, location=self.locs[self.target_loc])  # type: ignore[attr-defined]
+        blit(target_holder, registration=5, location=self.locs[self.target_loc])  # type: ignore[known-attribute]
         if P.development_mode and not prep:
             hand_pos = self.get_pos()
             blit(
@@ -435,7 +429,7 @@ class GripApertureRedux(klibs.Experiment):
                 Expected format: {'markers': [{'key1': val1, ...}, ...]}
         """
 
-        if marker_set.get('label') == HAND_MARKER_LABEL:
+        if marker_set.get('label') == P.hand_marker_setname:  # type: ignore[known-attribute]
             # Append data to trial-specific CSV file
             fname = self.ot.data_dir
             header = list(marker_set['markers'][0].keys())
