@@ -8,7 +8,9 @@ manual_demographics_collection = False
 manual_trial_generation = False
 run_practice_blocks = True
 multi_user = False
-view_distance = 57  # in centimeters, 57cm = 1 deg of visual angle per cm of screen
+view_distance = (
+    57  # in centimeters, 57cm = 1 deg of visual angle per cm of screen
+)
 allow_hidpi = False
 
 #########################################
@@ -23,8 +25,8 @@ eye_tracking = False
 default_fill_color = (45, 45, 45, 255)
 default_color = (255, 255, 255, 255)
 default_font_size = 23
-default_font_unit = "px"
-default_font_name = "Hind-Medium"
+default_font_unit = 'px'
+default_font_name = 'Hind-Medium'
 
 #########################################
 # EyeLink Settings
@@ -42,8 +44,8 @@ saccadic_motion_threshold = 0.15
 multi_session_project = False
 trials_per_block = 80
 blocks_per_experiment = 2
-conditions = ["pinched", "unpinched"]
-default_condition = "pinched"
+conditions = []
+default_condition = None
 
 #########################################
 # Development Mode Settings
@@ -56,15 +58,44 @@ dm_show_gaze_dot = True
 #########################################
 # Data Export Settings
 #########################################
-primary_table = "trials"
-unique_identifier = "userhash"
-exclude_data_cols = ["created"]
-append_info_cols = ["random_seed"]
-datafile_ext = ".txt"
+primary_table = 'trials'
+unique_identifier = 'userhash'
+exclude_data_cols = ['created']
+append_info_cols = ['random_seed']
+datafile_ext = '.txt'
 append_hostname = False
 
 #########################################
 # PROJECT-SPECIFIC VARS
 #########################################
-task_order = ["GBYK", "KBYG"]
+task_order = ['GBYK', 'KBYG']
 trials_per_practice_block = 8
+cm_wide = 5
+cm_tall = 9
+cm_brim = 1
+cm_offset = 10
+
+# TODO: Make this relative to rt
+reach_window_post_go_signal = 1000
+go_signal_onset = (500, 2000)
+post_reach_window = 1000
+gbyk_distance_threshold = (
+    50,
+    100,
+)  # these two determine when to present target
+gbyk_timing_threshold = 0.2  # NOTE: this is in seconds, not ms
+
+# audio
+tone_duration = 100
+tone_shape = 'sine'
+tone_freq = 784  # ridin' on yo G5 airplane
+tone_volume = 1.0
+
+opti_data_dir = 'OptiData'
+opti_trial_lead_time = 100   # ms
+
+plato_open_cmd = b'55'
+plato_close_cmd = b'56'
+arduino_comport = 'COM6'
+baudrate = 9600
+hand_marker_setname = 'hand'

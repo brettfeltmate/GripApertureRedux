@@ -5,7 +5,9 @@ __author__ = 'Brett Feltmate'
 # external imports
 import os
 from csv import DictWriter
+from datetime import datetime
 from random import randrange
+
 
 # local imports
 from get_key_state import get_key_state  # type: ignore[import]
@@ -13,40 +15,21 @@ from get_key_state import get_key_state  # type: ignore[import]
 import klibs
 from klibs import P
 from klibs.KLAudio import Tone
+from klibs.KLConstants import STROKE_CENTER, STROKE_INNER
 from klibs.KLCommunication import message
 from klibs.KLExceptions import TrialException
 from klibs.KLGraphics import KLDraw as kld
 from klibs.KLGraphics import blit, fill, flip, clear
 from klibs.KLUserInterface import any_key, key_pressed, ui_request, smart_sleep
 from klibs.KLUtilities import hide_mouse_cursor, line_segment_len, pump
-from klibs.KLBoundary import CircleBoundary, BoundarySet
+from klibs.KLBoundary import RectangleBoundary, BoundarySet
 from klibs.KLTime import CountDown
 
 from natnetclient_rough import NatNetClient  # type: ignore[import]
 from OptiTracker import OptiTracker  # type: ignore[import]
 from pyfirmata import serial  # type: ignore[import]
 
-# experiment constants
-
-# timings
-GO_SIGNAL_ONSET = (500, 2000)
-# TODO: Make this relative to rt
-REACH_WINDOW_POST_GO_SIGNAL = 1000
-POST_REACH_WINDOW = 1000
-GBYK_DISTANCE_THRESHOLD = (
-    50,
-    100,
-)  # these two determine when to present target
-GBYK_TIMING_THRESHOLD = 0.2  # NOTE: this is in seconds, not ms
-
-# audio
-TONE_DURATION = 100
-TONE_SHAPE = 'sine'
-TONE_FREQ = 784  # ridin' on yo G5 airplane
-TONE_VOLUME = 1.0
-
-
-# fills
+# colour fills
 WHITE = (255, 255, 255, 255)
 GRUE = (90, 90, 96, 255)
 RED = (255, 0, 0, 255)
@@ -54,38 +37,33 @@ RED = (255, 0, 0, 255)
 # anti-typo protections
 LEFT = 'left'
 RIGHT = 'right'
-SMALL = 'small'
-LARGE = 'large'
+WIDE = 'wide'
+TALL = 'tall'
 TARGET = 'target'
 DISTRACTOR = 'distractor'
 GBYK = 'GBYK'
 KBYG = 'KBYG'
-OPEN = b'55'
-CLOSE = b'56'
+GO_SIGNAL = 'go_signal'
+REACH_WINDOW_CLOSED = 'reach_window_closed'
+TRIAL_TIMEOUT = 'trial_timeout'
+POS_X = 'pos_x'
+POS_Y = 'pos_y'
+POS_Z = 'pos_z'
+SPACE = 'space'
+PREMATURE_REACH = 'Premature reach'
+REACH_TIMEOUT = 'Reach timeout'
+NA = 'NA'
 
 
 class GripApertureRedux(klibs.Experiment):
     def setup(self):
-        # force experimentor to manually determine participant condition
-        if P.condition is None:
-            raise RuntimeError(
-                (
-                    'Condition not specified!.'
-                    '\nSpecify starting position at runtime by passing the -c flag.'
-                    '\ne.g.'
-                    '\n\nklibs run 24 -c pinched'
-                    '\nor'
-                    '\nklibs run 24 -c unpinched'
-                    ''
-                )
-            )
-
         # sizings
         self.px_cm = int(P.ppi / 2.54)
-        DIAM_SMALL = 5 * self.px_cm
-        DIAM_LARGE = 9 * self.px_cm
-        BRIMWIDTH = 1 * self.px_cm
-        POS_OFFSET = 10 * self.px_cm
+
+        px_wide = P.cm_wide * self.px_cm  # type: ignore[known-attribute]
+        px_tall = P.cm_tall * self.px_cm  # type: ignore[known-attribute]
+        px_brim = P.cm_brim * self.px_cm  # type: ignore[known-attribute]
+        px_offset = P.cm_offset * self.px_cm  # type: ignore[known-attribute]
 
         # for working with streamed motion capture data
         self.ot = OptiTracker(marker_count=10, sample_rate=120, window_size=5)
@@ -97,65 +75,89 @@ class GripApertureRedux(klibs.Experiment):
         self.nnc.markers_listener = self.marker_set_listener
 
         # plato goggles controller
-        self.goggles = serial.Serial(port='COM6', baudrate=9600)
+        self.goggles = serial.Serial(port=P.arduino_comport, baudrate=P.baudrate)  # type: ignore[known-attribute]
 
         # 12cm between placeholder centers
         self.locs = {
-            LEFT: (P.screen_c[0] - POS_OFFSET, P.screen_c[1]),  # type: ignore[attr-defined]
-            RIGHT: (P.screen_c[0] + POS_OFFSET, P.screen_c[1]),  # type: ignore[attr-defined]
+            LEFT: (P.screen_c[0] - px_offset, P.screen_c[1]),
+            RIGHT: (P.screen_c[0] + px_offset, P.screen_c[1]),
         }
 
         self.sizes = {
-            SMALL: DIAM_SMALL,
-            LARGE: DIAM_LARGE,
+            WIDE: (px_wide, px_tall),
+            TALL: (px_tall, px_wide),
         }
 
         # spawn object placeholders
         self.placeholders = {
-            TARGET: {
-                SMALL: kld.Annulus(DIAM_SMALL, BRIMWIDTH),
-                LARGE: kld.Annulus(DIAM_LARGE, BRIMWIDTH),
-            },
-            DISTRACTOR: {
-                SMALL: kld.Annulus(DIAM_SMALL, BRIMWIDTH),
-                LARGE: kld.Annulus(DIAM_LARGE, BRIMWIDTH),
-            },
+            item: {
+                shape: kld.Rectangle(
+                    *self.sizes[shape],
+                    stroke=[
+                        px_brim,
+                        WHITE if item == TARGET else GRUE,
+                        STROKE_CENTER,
+                    ],
+                    fill=WHITE if item == TARGET else GRUE,
+                )
+                for shape in (WIDE, TALL)
+            }
+            for item in (TARGET, DISTRACTOR)
+        }
+
+        if P.development_mode:
+            self.cursor = kld.Annulus(
+                self.px_cm * 2,
+                self.px_cm // 5,
+                stroke=[self.px_cm // 10, RED, STROKE_INNER],
+                fill=RED,
+            )
+
+        self.pts = {
+            side: {
+                shape: self.calc_bounds(self.locs[side], self.sizes[shape])
+                for shape in (WIDE, TALL)
+            }
+            for side in (LEFT, RIGHT)
         }
 
         # spawn go signal
         self.go_signal = Tone(
-            TONE_DURATION, TONE_SHAPE, TONE_FREQ, TONE_VOLUME
+            P.tone_duration, P.tone_shape, P.tone_freq, P.tone_volume  # type: ignore[known-attribute]
         )
-
         # inject practice blocks into fixed block sequence
         if P.run_practice_blocks:
-            self.block_sequence = [GBYK, GBYK, KBYG, KBYG]  # type: ignore[attr-defined]
+            self.block_sequence = [
+                cond
+                for cond in P.task_order  # type: ignore[known-attribute]
+                for _ in range(P.blocks_per_experiment // 2)
+            ]
             self.insert_practice_block(
-                block_nums=[1, 3], trial_counts=P.trials_per_practice_block  # type: ignore[attr-defined]
+                block_nums=[
+                    i for i in range(P.blocks_per_experiment) if i % 2 != 0
+                ],
+                trial_counts=P.trials_per_practice_block,  # type: ignore[known-attribute]
             )
         else:
-            self.block_sequence = P.task_order  # type: ignore[attr-defined]
+            self.block_sequence = P.task_order  # type: ignore[known-attribute]
+        # TODO: use a distance criterion instead
 
         # where motion capture data is stored
-        if not os.path.exists('OptiData'):
-            os.mkdir('OptiData')
-
-        if not os.path.exists(f'OptiData/{P.condition}'):
-            os.mkdir(f'OptiData/{P.condition}')
-
-        os.mkdir(f'OptiData/{P.condition}/{P.p_id}')
-        os.mkdir(f'OptiData/{P.condition}/{P.p_id}/testing')
+        self._ensure_dir_exists(P.opti_data_dir)  # type: ignore[known-attribute]
+        participant_dir = self._get_participant_base_dir()
+        self._ensure_dir_exists(participant_dir)
+        self._ensure_dir_exists(os.path.join(participant_dir, 'testing'))
 
         if P.run_practice_blocks:
-            os.mkdir(f'OptiData/{P.condition}/{P.p_id}/practice')
+            self._ensure_dir_exists(os.path.join(participant_dir, 'practice'))
 
     def block(self):
-
         self.block_task = self.block_sequence.pop(0)
 
-        self.block_dir = f'OptiData/{P.condition}/{P.p_id}'
-        self.block_dir += '/practice' if P.practicing else '/testing'
-        self.block_dir += f'/{self.block_task}'
+        participant_dir = self._get_participant_base_dir()
+        self.block_dir = self._get_block_dir_path(
+            participant_dir, P.practicing, self.block_task
+        )
 
         # data directories are (or should be) unique to individuals
         if os.path.exists(self.block_dir):
@@ -163,7 +165,7 @@ class GripApertureRedux(klibs.Experiment):
                 f'Data directory already exists at {self.block_dir}'
             )
         else:
-            os.mkdir(self.block_dir)
+            self._ensure_dir_exists(self.block_dir)
 
         # TODO: Proper instructions
         instrux = (
@@ -183,39 +185,40 @@ class GripApertureRedux(klibs.Experiment):
         any_key()
 
     def trial_prep(self):
-
         # when to label a reach as being in-progress
-        self.reach_threshold = randrange(*GBYK_DISTANCE_THRESHOLD, step=10)
+        self.reach_threshold = randrange(
+            *P.gbyk_distance_threshold, step=10  # type: ignore[known-attribute]
+        )
 
         # event timings
         self.evm.add_event(
-            label='go_signal', onset=randrange(*GO_SIGNAL_ONSET)
+            label='go_signal', onset=randrange(*P.go_signal_onset)  # type: ignore[known-attribute]
         )
         self.evm.add_event(
-            label='reach_window_closed',
-            onset=REACH_WINDOW_POST_GO_SIGNAL,
-            after='go_signal',
+            label=REACH_WINDOW_CLOSED,
+            onset=P.reach_window_post_go_signal,  # type: ignore[known-attribute]
+            after=GO_SIGNAL,
         )
         self.evm.add_event(
-            label='trial_timeout',
-            onset=POST_REACH_WINDOW,
-            after='reach_window_closed',
+            label=TRIAL_TIMEOUT,
+            onset=P.post_reach_window,  # type: ignore[known-attribute]
+            after=REACH_WINDOW_CLOSED,
         )
 
         # determine targ/dist locations
-        self.distractor_loc = LEFT if self.target_loc == RIGHT else RIGHT  # type: ignore[attr-defined]
+        self.distractor_loc = LEFT if self.target_loc == RIGHT else RIGHT  # type: ignore[known-attribute]
 
         # if hand position falls within one of these, presume object within it has been grasped
-        self.target_boundary = CircleBoundary(
-            label='target',
-            center=self.locs[self.target_loc],  # type: ignore[attr-defined]
-            radius=self.sizes[self.target_size],  # type: ignore[attr-defined]
+        self.target_boundary = RectangleBoundary(
+            label=TARGET,
+            p1=self.pts[self.target_loc][self.target_shape][0],  # type: ignore[known-attribute]
+            p2=self.pts[self.target_loc][self.target_shape][1],  # type: ignore[known-attribute]
         )
 
-        self.distractor_boundary = CircleBoundary(
-            label='distractor',
-            center=self.locs[self.distractor_loc],  # type: ignore[attr-defined]
-            radius=self.sizes[self.distractor_size],  # type: ignore[attr-defined]
+        self.distractor_boundary = RectangleBoundary(
+            label=DISTRACTOR,
+            p1=self.pts[self.distractor_loc][self.distractor_shape][0],  # type: ignore[known-attribute]
+            p2=self.pts[self.distractor_loc][self.distractor_shape][1],  # type: ignore[known-attribute]
         )
 
         self.bounds = BoundarySet(
@@ -223,70 +226,65 @@ class GripApertureRedux(klibs.Experiment):
         )
 
         # blind participant during prop setup
-        self.goggles.write(CLOSE)
+        self.goggles.write(P.plato_close_cmd)  # type: ignore[known-attribute]
         self.present_stimuli(prep=True)
 
         while True:  # participant readiness signalled by keypress
             q = pump(True)
-            if key_pressed(key='space', queue=q):
+            if key_pressed(key=SPACE, queue=q):
                 break
 
-        self.present_stimuli()  # reset display
-
         # touch datafile for present trial
-        self.ot.data_dir = (
-            f'{self.block_dir}/'
-            + f'trial_{P.trial_number}'
-            + f'_targetOn_{self.target_loc}'  # type: ignore[attr-defined]
-            + f'_targetSize_{self.target_size}'  # type: ignore[attr-defined]
-            + f'_distractorSize_{self.distractor_size}'  # type: ignore[attr-defined]
-            + '_hand_markers.csv'
+        self.ot.data_dir = self._get_trial_filename(
+            self.block_dir,
+            P.trial_number,
+            self.target_loc,  # type: ignore[known-attribute]
+            self.target_shape,  # type: ignore[known-attribute]
+            self.distractor_shape,  # type: ignore[known-attribute]
         )
 
         self.nnc.startup()  # start marker tracking
 
-        # sometimes datafile is queried before being created, give headstart
-        # FIXME: why tho
-        nnc_lead_time = CountDown(0.034)
-        while nnc_lead_time.counting():
-            _ = ui_request()
+        # ensure some data exists before beginning trial
+        smart_sleep(P.opti_trial_lead_time)  # type: ignore[known-attribute]
 
     def trial(self):  # type: ignore[override]
         hide_mouse_cursor()
 
+        # Validate trial data file exists and contains data
+        self._validate_trial_data_file(self.ot.data_dir)
+
+        self.present_stimuli()
+
         # control flags
         self.rt = None
         self.mt = None
-        self.target_onset_time = 'NA'
+        self.target_onset_time = NA
         self.target_visible = False
         self.object_grasped = None
 
-        if self.block_task == 'KBYG':
+        if self.block_task == KBYG:
             # target is immediately available
             self.present_stimuli(target=True)
             self.target_visible = True
 
         # reference point to determine if/when to present targets in GBYK trials
-        start_pos = self.ot.position()
-        start_pos = (
-            start_pos['pos_x'][0].item() * self.px_cm,
-            start_pos['pos_z'][0].item() * self.px_cm,
-        )
+        start_pos = self.get_hand_pos()
 
         # restrict movement until go signal received
-        while self.evm.before('go_signal'):
+        while self.evm.before(GO_SIGNAL):
             _ = ui_request()
-            if get_key_state('space') == 0:
-                self.abort_trial('Premature reach')
+            if get_key_state(SPACE) == 0:
+                self.abort_trial(PREMATURE_REACH)
 
         # used to calculate RT, also logged for analysis purposes
         go_signal_onset_time = self.evm.trial_time_ms
 
         self.go_signal.play()
-        self.goggles.write(OPEN)
+        self.goggles.write(P.plato_open_cmd)  # type: ignore[known-attribute]
 
         # monitor movement status following go-signal
-        while self.evm.before('reach_window_closed'):
+        while self.evm.before(REACH_WINDOW_CLOSED):
             _ = ui_request()
 
             # key release indicates reach is in motion
@@ -297,15 +295,10 @@ class GripApertureRedux(klibs.Experiment):
 
             # Whilst reach in motion
             else:
-                curr_pos = self.ot.position()
-                curr_pos = (
-                    curr_pos['pos_x'][0].item() * self.px_cm,
-                    curr_pos['pos_z'][0].item() * self.px_cm,
-                )
+                curr_pos = self.get_hand_pos()
 
                 # In GBYK blocks, present target once reach exceeds distance threshold
                 if not self.target_visible:
-
                     if (
                         line_segment_len(start_pos, curr_pos)
                         > self.reach_threshold
@@ -324,8 +317,7 @@ class GripApertureRedux(klibs.Experiment):
 
                     timeout = CountDown(0.3)
                     while timeout.counting():
-                        q = pump(True)
-                        _ = ui_request(queue=q)
+                        smart_sleep(10)
 
                     self.nnc.shutdown()
                     # time from button release to object grasped
@@ -333,26 +325,25 @@ class GripApertureRedux(klibs.Experiment):
 
         # if reach window closes before object is grasped, trial is aborted
         if self.object_grasped is None:
-            self.abort_trial('Reach timeout')
+            self.abort_trial(REACH_TIMEOUT)
 
         clear()
 
         # Don't lock up system while waiting for trial to end
-        while self.evm.before('trial_timeout'):
+        while self.evm.before(TRIAL_TIMEOUT):
             _ = ui_request()
 
         return {
             'block_num': P.block_number,
             'trial_num': P.trial_number,
             'practicing': P.practicing,
-            'exp_condition': P.condition,
             'task_type': self.block_task,
-            'target_loc': self.target_loc,  # type: ignore[attr-defined]
-            'target_size': self.target_size,  # type: ignore[attr-defined]
-            'distractor_size': self.distractor_size,  # type: ignore[attr-defined]
+            'target_loc': self.target_loc,  # type: ignore[known-attribute]
+            'target_shape': self.target_shape,  # type: ignore[known-attribute]
+            'distractor_shape': self.distractor_shape,  # type: ignore[known-attribute]
             'go_signal_onset': go_signal_onset_time,
             'distance_threshold': (
-                self.reach_threshold if self.block_task == 'GBYK' else 'NA'
+                self.reach_threshold if self.block_task == GBYK else NA
             ),
             'target_onset': self.target_onset_time,
             'response_time': self.rt,
@@ -366,14 +357,24 @@ class GripApertureRedux(klibs.Experiment):
     def clean_up(self):
         pass
 
+    def get_hand_pos(self):
+        hand_marker = self.ot.position()
+        hand_pos = (
+            hand_marker[POS_X][0].item() * self.px_cm,
+            hand_marker[POS_Z][0].item() * self.px_cm,
+        )
+        return hand_pos
+
     def abort_trial(self, err=''):
         msgs = {
-            'Premature reach': 'Please wait for the go signal.',
-            'Reach timeout': 'Too slow!',
+            PREMATURE_REACH: 'Please wait for the go signal.',
+            REACH_TIMEOUT: 'Too slow!',
         }
 
-        self.goggles.write(OPEN)
+        self.goggles.write(P.plato_open_cmd)  # type: ignore[known-attribute]
+
         self.nnc.shutdown()
+
         os.remove(self.ot.data_dir)
 
         fill()
@@ -393,13 +394,13 @@ class GripApertureRedux(klibs.Experiment):
         if prep:
             message(
                 'Place props within size-matched rings.\n\nKeypress to start trial.',
-                location=[P.screen_c[0], P.screen_c[1] // 3],  # type: ignore[attr-defined]
+                location=[P.screen_c[0], P.screen_c[1] // 3],  # type: ignore[known-attribute]
             )
 
-        distractor_holder = self.placeholders[DISTRACTOR][self.distractor_size]  # type: ignore[attr-defined]
+        distractor_holder = self.placeholders[DISTRACTOR][self.distractor_shape]  # type: ignore[known-attribute]
         distractor_holder.fill = GRUE
 
-        target_holder = self.placeholders[TARGET][self.target_size]  # type: ignore[attr-defined]
+        target_holder = self.placeholders[TARGET][self.target_shape]  # type: ignore[known-attribute]
         target_holder.fill = WHITE if target else GRUE
 
         blit(
@@ -407,7 +408,16 @@ class GripApertureRedux(klibs.Experiment):
             registration=5,
             location=self.locs[self.distractor_loc],
         )
-        blit(target_holder, registration=5, location=self.locs[self.target_loc])  # type: ignore[attr-defined]
+
+        blit(target_holder, registration=5, location=self.locs[self.target_loc])  # type: ignore[known-attribute]
+
+        if P.development_mode and not prep:
+            hand_pos = self.get_hand_pos()
+            blit(
+                self.cursor,
+                registration=5,
+                location=hand_pos,
+            )
 
         flip()
 
@@ -419,7 +429,7 @@ class GripApertureRedux(klibs.Experiment):
                 Expected format: {'markers': [{'key1': val1, ...}, ...]}
         """
 
-        if marker_set.get('label') == 'hand':
+        if marker_set.get('label') == P.hand_marker_setname:  # type: ignore[known-attribute]
             # Append data to trial-specific CSV file
             fname = self.ot.data_dir
             header = list(marker_set['markers'][0].keys())
@@ -436,3 +446,72 @@ class GripApertureRedux(klibs.Experiment):
                 for marker in marker_set.get('markers', None):  # type: ignore[iterable]
                     if marker is not None:
                         writer.writerow(marker)
+
+    def calc_bounds(self, loc, size, extend=1.5):
+        padding = extend * self.px_cm
+        return (
+            (
+                (loc[0] - size[0] / 2) + padding,
+                (loc[1] - size[1] / 2) + padding,
+            ),
+            (
+                (loc[0] + size[0] / 2) + padding,
+                (loc[1] + size[1] / 2) + padding,
+            ),
+        )
+
+    def _ensure_dir_exists(self, path):
+        """Create directory if it doesn't exist. Raises exception on failure."""
+        try:
+            os.makedirs(path, exist_ok=True)
+        except OSError as e:
+            raise OSError(f"Failed to create directory '{path}': {e}")
+
+    def _get_participant_base_dir(self):
+        """Get base directory path for current participant."""
+
+        if P.development_mode:  # Don't pollute real data with dev tests
+            dev_dir = os.path.join(P.opti_data_dir, 'DEVTESTS')  # type: ignore[known-attribute]
+            self._ensure_dir_exists(dev_dir)
+            p_id = datetime.now().strftime('%m%d_%H%M')
+        else:
+            p_id = str(P.p_id)
+        return os.path.join(
+            P.opti_data_dir, p_id  # type: ignore[known-attribute]
+        )
+
+    def _get_block_dir_path(self, participant_dir, is_practice, block_task):
+        """Construct block directory path."""
+        phase = 'practice' if is_practice else 'testing'
+        return os.path.join(participant_dir, phase, block_task)
+
+    def _get_trial_filename(
+        self,
+        block_dir,
+        trial_num,
+        target_loc,
+        target_orient,
+        distractor_orient,
+    ):
+        """Construct trial data filename."""
+        # TODO: markup file with factor levels instead of shoehorning into filename
+        filename = f'trial_{trial_num}_tSide_{target_loc}_tShape{target_orient}_dShape_{distractor_orient}_markers.csv'
+        return os.path.join(block_dir, filename)
+
+    def _validate_trial_data_file(self, filepath):
+        """Validate that trial data file exists and contains data. Raises exception if not."""
+        if not os.path.exists(filepath):
+            raise FileNotFoundError(
+                f'Trial data file does not exist: {filepath}'
+            )
+
+        try:
+            with open(filepath, 'r') as f:
+                lines = f.readlines()
+                # Should have at least header + some data lines
+                if len(lines) < 6:
+                    raise ValueError(
+                        f'OptiData file at \n\t{filepath}\nis sparser than expected, with only {len(lines)} lines.'
+                    )
+        except IOError as e:
+            raise IOError(f'Cannot read trial data file: {filepath} - {e}')

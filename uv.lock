@@ -1,5 +1,5 @@
 version = 1
-revision = 2
+revision = 3
 requires-python = ">=3.13"
 
 [[package]]
@@ -31,12 +31,14 @@ source = { virtual = "." }
 dependencies = [
     { name = "construct" },
     { name = "klibs" },
+    { name = "pyfirmata" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "construct", specifier = ">=2.10.70" },
     { name = "klibs", git = "https://github.com/a-hurst/klibs" },
+    { name = "pyfirmata", specifier = ">=1.1.0" },
 ]
 
 [[package]]
@@ -111,6 +113,18 @@ wheels = [
 ]
 
 [[package]]
+name = "pyfirmata"
+version = "1.1.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "pyserial" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/ff/e6/512cc154c0370e22429db3139e7c906c4f8ad2646f4ca816547e9ae2c26c/pyFirmata-1.1.0.tar.gz", hash = "sha256:cc180d1b30c85a2bbca62c15fef1b871db048cdcfa80959968356d97bd3ff08e", size = 14447, upload-time = "2019-03-10T16:21:08.481Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/14/f0/05e30c9cee38f9c0e8ef08a07ff28e4c391c7d95e2bcb1f334f58cc2bb28/pyFirmata-1.1.0-py2.py3-none-any.whl", hash = "sha256:03091ffd0b06a483d286d9738ead97a50c55cf1bf6b89a5bd0c420d0a7797420", size = 14262, upload-time = "2019-03-10T16:21:06.739Z" },
+]
+
+[[package]]
 name = "pyopengl"
 version = "3.1.9"
 source = { registry = "https://pypi.org/simple" }
@@ -142,4 +156,13 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/80/11/9bee58ff7aa742e7917d97a926ff3d1c2e9a67ac2e82244c4c50c51e3df8/pysdl2_dll-2.32.0-py2.py3-none-manylinux_2_28_x86_64.whl", hash = "sha256:490f1525c47ab00d8150ed1245fb306f02628d1b43f0e162e6903ed5c1a4a1ef", size = 5176310, upload-time = "2025-03-20T20:59:43.748Z" },
     { url = "https://files.pythonhosted.org/packages/2e/9c/f09d804737501b4813b3612c95e4d74dcbc0c82a51a74542ed8e5a4a27b0/pysdl2_dll-2.32.0-py2.py3-none-win32.whl", hash = "sha256:0139ce2160d8387fa4f9bbd5272b374be521e9dd133cd9a2d76c20a20d599bed", size = 3405412, upload-time = "2025-03-20T20:51:54.036Z" },
     { url = "https://files.pythonhosted.org/packages/47/ef/5ba6580e06aec8f1e3004269a6939457e63e4791ca1e36ab2e3492a120da/pysdl2_dll-2.32.0-py2.py3-none-win_amd64.whl", hash = "sha256:28f577907bf17df3b3600daebbf0534aeaa44af266430ba09c7e04ab3e22b41f", size = 4042963, upload-time = "2025-03-20T20:52:34.372Z" },
+]
+
+[[package]]
+name = "pyserial"
+version = "3.5"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/1e/7d/ae3f0a63f41e4d2f6cb66a5b57197850f919f59e558159a4dd3a818f5082/pyserial-3.5.tar.gz", hash = "sha256:3c77e014170dfffbd816e6ffc205e9842efb10be9f58ec16d3e8675b4925cddb", size = 159125, upload-time = "2020-11-23T03:59:15.045Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/07/bc/587a445451b253b285629263eb51c2d8e9bcea4fc97826266d186f96f558/pyserial-3.5-py2.py3-none-any.whl", hash = "sha256:c4451db6ba391ca6ca299fb3ec7bae67a5c55dde170964c7a14ceefec02f2cf0", size = 90585, upload-time = "2020-11-23T03:59:13.41Z" },
 ]
