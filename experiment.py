@@ -125,16 +125,22 @@ class GripApertureRedux(klibs.Experiment):
         self.go_signal = Tone(
             P.tone_duration, P.tone_shape, P.tone_freq, P.tone_volume  # type: ignore[known-attribute]
         )
-
         # inject practice blocks into fixed block sequence
         if P.run_practice_blocks:
-            self.block_sequence = [GBYK, GBYK, KBYG, KBYG]
+            self.block_sequence = [
+                cond
+                for cond in P.task_order  # type: ignore[known-attribute]
+                for _ in range(P.blocks_per_experiment // 2)
+            ]
             self.insert_practice_block(
-                block_nums=[1, 3],
+                block_nums=[
+                    i for i in range(P.blocks_per_experiment) if i % 2 != 0
+                ],
                 trial_counts=P.trials_per_practice_block,  # type: ignore[known-attribute]
             )
         else:
             self.block_sequence = P.task_order  # type: ignore[known-attribute]
+        # TODO: use a distance criterion instead
 
         # where motion capture data is stored
         self._ensure_dir_exists(P.opti_data_dir)  # type: ignore[known-attribute]
@@ -205,14 +211,14 @@ class GripApertureRedux(klibs.Experiment):
         # if hand position falls within one of these, presume object within it has been grasped
         self.target_boundary = RectangleBoundary(
             label=TARGET,
-            p1=self.pts[self.target_loc][self.target_orientation][0],  # type: ignore[known-attribute]
-            p2=self.pts[self.target_loc][self.target_orientation][1],  # type: ignore[known-attribute]
+            p1=self.pts[self.target_loc][self.target_shape][0],  # type: ignore[known-attribute]
+            p2=self.pts[self.target_loc][self.target_shape][1],  # type: ignore[known-attribute]
         )
 
         self.distractor_boundary = RectangleBoundary(
             label=DISTRACTOR,
-            p1=self.pts[self.distractor_loc][self.distractor_orientation][0],  # type: ignore[known-attribute]
-            p2=self.pts[self.distractor_loc][self.distractor_orientation][1],  # type: ignore[known-attribute]
+            p1=self.pts[self.distractor_loc][self.distractor_shape][0],  # type: ignore[known-attribute]
+            p2=self.pts[self.distractor_loc][self.distractor_shape][1],  # type: ignore[known-attribute]
         )
 
         self.bounds = BoundarySet(
@@ -233,8 +239,8 @@ class GripApertureRedux(klibs.Experiment):
             self.block_dir,
             P.trial_number,
             self.target_loc,  # type: ignore[known-attribute]
-            self.target_orientation,  # type: ignore[known-attribute]
-            self.distractor_orientation,  # type: ignore[known-attribute]
+            self.target_shape,  # type: ignore[known-attribute]
+            self.distractor_shape,  # type: ignore[known-attribute]
         )
 
         self.nnc.startup()  # start marker tracking
@@ -331,11 +337,10 @@ class GripApertureRedux(klibs.Experiment):
             'block_num': P.block_number,
             'trial_num': P.trial_number,
             'practicing': P.practicing,
-            'exp_condition': P.condition,
             'task_type': self.block_task,
             'target_loc': self.target_loc,  # type: ignore[known-attribute]
-            'target_orientation': self.target_orientation,  # type: ignore[known-attribute]
-            'distractor_orientation': self.distractor_orientation,  # type: ignore[known-attribute]
+            'target_shape': self.target_shape,  # type: ignore[known-attribute]
+            'distractor_shape': self.distractor_shape,  # type: ignore[known-attribute]
             'go_signal_onset': go_signal_onset_time,
             'distance_threshold': (
                 self.reach_threshold if self.block_task == GBYK else NA
@@ -367,7 +372,9 @@ class GripApertureRedux(klibs.Experiment):
         }
 
         self.goggles.write(P.plato_open_cmd)  # type: ignore[known-attribute]
+
         self.nnc.shutdown()
+
         os.remove(self.ot.data_dir)
 
         fill()
@@ -380,15 +387,6 @@ class GripApertureRedux(klibs.Experiment):
 
         raise TrialException(err)
 
-    def get_pos(self):
-        hand_marker = self.ot.position()
-        hand_pos = (
-            P.screen_x - (hand_marker[POS_X][0].item() * self.px_cm),
-            P.screen_y - (hand_marker[POS_Z][0].item() * self.px_cm),
-        )
-        print(f'hand_pos: {hand_pos}')
-        return hand_pos
-
     # conditionally present stimuli
     def present_stimuli(self, prep=False, target=False):
         fill()
@@ -399,10 +397,10 @@ class GripApertureRedux(klibs.Experiment):
                 location=[P.screen_c[0], P.screen_c[1] // 3],  # type: ignore[known-attribute]
             )
 
-        distractor_holder = self.placeholders[DISTRACTOR][self.distractor_orientation]  # type: ignore[known-attribute]
+        distractor_holder = self.placeholders[DISTRACTOR][self.distractor_shape]  # type: ignore[known-attribute]
         distractor_holder.fill = GRUE
 
-        target_holder = self.placeholders[TARGET][self.target_orientation]  # type: ignore[known-attribute]
+        target_holder = self.placeholders[TARGET][self.target_shape]  # type: ignore[known-attribute]
         target_holder.fill = WHITE if target else GRUE
 
         blit(
@@ -410,9 +408,11 @@ class GripApertureRedux(klibs.Experiment):
             registration=5,
             location=self.locs[self.distractor_loc],
         )
+
         blit(target_holder, registration=5, location=self.locs[self.target_loc])  # type: ignore[known-attribute]
+
         if P.development_mode and not prep:
-            hand_pos = self.get_pos()
+            hand_pos = self.get_hand_pos()
             blit(
                 self.cursor,
                 registration=5,
