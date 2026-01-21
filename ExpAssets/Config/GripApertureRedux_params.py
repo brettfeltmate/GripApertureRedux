@@ -72,7 +72,7 @@ task_order = ['GBYK', 'KBYG']
 trials_per_practice_block = 8
 cm_wide = 5
 cm_tall = 9
-cm_brim = 1
+cm_brim = 3
 cm_offset = 10
 
 # TODO: Make this relative to rt
@@ -99,3 +99,4 @@ plato_close_cmd = b'56'
 arduino_comport = 'COM6'
 baudrate = 9600
 hand_marker_setname = 'hand'
+optitrack_origin = 'bottom_left'
