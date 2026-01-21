@@ -467,8 +467,10 @@ class GripApertureRedux(klibs.Experiment):
                     if marker is not None:
                         writer.writerow(marker)
 
-    def calc_bounds(self, loc, size, extend=1.5):
-        padding = extend * self.px_cm
+    def calc_bounds(self, loc, size):
+        # sometimes hand pos is pulled away by wrist markers
+        # so add padding to boundaries to compensate
+        padding = P.cm_padding * self.px_cm  # type: ignore[known-attribute]
         return (
             (
                 (loc[0] - size[0] / 2) + padding,
