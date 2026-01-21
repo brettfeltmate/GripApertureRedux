@@ -77,10 +77,11 @@ class GripApertureRedux(klibs.Experiment):
         # plato goggles controller
         self.goggles = serial.Serial(port=P.arduino_comport, baudrate=P.baudrate)  # type: ignore[known-attribute]
 
-        # 12cm between placeholder centers
+        # 12cm centre-to-centre
+        # each centered 12cm from screen top
         self.locs = {
-            LEFT: (P.screen_c[0] - px_offset, P.screen_c[1]),
-            RIGHT: (P.screen_c[0] + px_offset, P.screen_c[1]),
+            LEFT: (P.screen_c[0] - px_offset, px_offset),
+            RIGHT: (P.screen_c[0] + px_offset, px_offset),
         }
 
         self.sizes = {
