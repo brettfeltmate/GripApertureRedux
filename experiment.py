@@ -357,13 +357,32 @@ class GripApertureRedux(klibs.Experiment):
     def clean_up(self):
         pass
 
+    def adjust_for_screen_origin(self, hand_pos_adj):
+        if P.optitrack_origin == 'bottom_left':  # type: ignore[known-attribute]
+            hand_pos_adj = (hand_pos_adj[0], P.screen_y - hand_pos_adj[1])
+        elif P.optitrack_origin == 'top_left':  # type: ignore[known-attribute]
+            pass  # no conversion needed
+        elif P.optitrack_origin == 'top_right':  # type: ignore[known-attribute]
+            hand_pos_adj = (P.screen_x - hand_pos_adj[0], hand_pos_adj[1])
+        elif P.optitrack_origin == 'bottom_right':  # type: ignore[known-attribute]
+            hand_pos_adj = (
+                P.screen_x - hand_pos_adj[0],
+                P.screen_y - hand_pos_adj[1],
+            )
+        else:
+            raise ValueError(
+                f'Invalid optitrack_origin: {P.optitrack_origin}'  # type: ignore[known-attribute]
+            )
+        return hand_pos_adj
+
     def get_hand_pos(self):
         hand_marker = self.ot.position()
         hand_pos = (
             hand_marker[POS_X][0].item() * self.px_cm,
             hand_marker[POS_Z][0].item() * self.px_cm,
         )
-        return hand_pos
+
+        return self.adjust_for_screen_origin(hand_pos)
 
     def abort_trial(self, err=''):
         msgs = {
