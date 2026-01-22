@@ -407,8 +407,13 @@ class GripApertureRedux(klibs.Experiment):
         distractor_holder = self.placeholders[DISTRACTOR][self.distractor_shape]  # type: ignore[known-attribute]
         distractor_holder.fill = GRUE
 
-        target_holder = self.placeholders[TARGET][self.target_shape]  # type: ignore[known-attribute]
-        target_holder.fill = WHITE if target else GRUE
+        if not target:
+            target_holder = self.placeholders[DISTRACTOR][self.target_shape]  # type: ignore[known-attribute]
+            target_holder.fill = GRUE
+
+        else:
+            target_holder = self.placeholders[TARGET][self.target_shape]  # type: ignore[known-attribute]
+            target_holder.fill = WHITE
 
         blit(
             distractor_holder,
