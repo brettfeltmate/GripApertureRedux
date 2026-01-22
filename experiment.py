@@ -80,8 +80,8 @@ class GripApertureRedux(klibs.Experiment):
         # 12cm centre-to-centre
         # each centered 12cm from screen top
         self.locs = {
-            LEFT: (P.screen_c[0] - px_offset, px_offset),
-            RIGHT: (P.screen_c[0] + px_offset, px_offset),
+            LEFT: (P.screen_c[0] - px_offset, P.screen_c[1]),
+            RIGHT: (P.screen_c[0] + px_offset, P.screen_c[1]),
         }
 
         self.sizes = {
