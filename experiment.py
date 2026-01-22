@@ -301,10 +301,7 @@ class GripApertureRedux(klibs.Experiment):
                 # In GBYK blocks, present target once reach exceeds distance threshold
                 if not self.target_visible:
                     if (
-                        line_segment_len(
-                            (start_pos[POS_X], start_pos[POS_Y]),
-                            (curr_pos[POS_X], curr_pos[POS_Y]),
-                        )
+                        line_segment_len(start_pos, curr_pos)
                         > self.reach_threshold
                     ):
                         self.present_stimuli(target=True)
@@ -367,7 +364,13 @@ class GripApertureRedux(klibs.Experiment):
             axis: markers[axis][0].item() * self.px_cm
             for axis in (POS_X, POS_Y, POS_Z)
         }
-        return hand_pos
+        return self._translate_pos(hand_pos)
+
+    def _translate_pos(self, pos):
+        return (
+            P.screen_x - pos[POS_X],
+            P.screen_y - pos[POS_Z]
+        )
 
     def abort_trial(self, err=''):
         msgs = {
@@ -416,12 +419,10 @@ class GripApertureRedux(klibs.Experiment):
         blit(target_holder, registration=5, location=self.locs[self.target_loc])  # type: ignore[known-attribute]
 
         if P.development_mode and not prep:
-            hand_pos = self.get_hand_pos()
             blit(
                 self.cursor,
                 registration=5,
-                location=(hand_pos[POS_X], hand_pos[POS_Y]),
-            )
+                location=self.get_hand_pos()            )
 
         flip()
 
@@ -479,7 +480,7 @@ class GripApertureRedux(klibs.Experiment):
         if P.development_mode:  # Don't pollute real data with dev tests
             dev_dir = os.path.join(P.opti_data_dir, 'DEVTESTS')  # type: ignore[known-attribute]
             self._ensure_dir_exists(dev_dir)
-            p_id = datetime.now().strftime('%m%d_%H%M')
+            p_id = datetime.now().strftime('%m%d_%H%M%S')
         else:
             p_id = str(P.p_id)
         return os.path.join(
