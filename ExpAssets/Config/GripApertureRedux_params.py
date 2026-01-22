@@ -77,7 +77,7 @@ cm_offset = 10
 cm_padding = 3
 
 # TODO: Make this relative to rt
-reach_window_post_go_signal = 1000
+reach_window_post_go_signal = 4000
 go_signal_onset = (500, 2000)
 post_reach_window = 1000
 gbyk_distance_threshold = (
@@ -99,5 +99,4 @@ plato_open_cmd = b'55'
 plato_close_cmd = b'56'
 arduino_comport = 'COM6'
 baudrate = 9600
-hand_marker_setname = 'hand'
-optitrack_origin = 'bottom_left'
+hand_marker_setname = 'right'

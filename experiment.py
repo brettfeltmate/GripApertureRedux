@@ -301,7 +301,10 @@ class GripApertureRedux(klibs.Experiment):
                 # In GBYK blocks, present target once reach exceeds distance threshold
                 if not self.target_visible:
                     if (
-                        line_segment_len(start_pos, curr_pos)
+                        line_segment_len(
+                            (start_pos[POS_X], start_pos[POS_Y]),
+                            (curr_pos[POS_X], curr_pos[POS_Y]),
+                        )
                         > self.reach_threshold
                     ):
                         self.present_stimuli(target=True)
@@ -358,32 +361,13 @@ class GripApertureRedux(klibs.Experiment):
     def clean_up(self):
         pass
 
-    def adjust_for_screen_origin(self, hand_pos_adj):
-        if P.optitrack_origin == 'bottom_left':  # type: ignore[known-attribute]
-            hand_pos_adj = (hand_pos_adj[0], P.screen_y - hand_pos_adj[1])
-        elif P.optitrack_origin == 'top_left':  # type: ignore[known-attribute]
-            pass  # no conversion needed
-        elif P.optitrack_origin == 'top_right':  # type: ignore[known-attribute]
-            hand_pos_adj = (P.screen_x - hand_pos_adj[0], hand_pos_adj[1])
-        elif P.optitrack_origin == 'bottom_right':  # type: ignore[known-attribute]
-            hand_pos_adj = (
-                P.screen_x - hand_pos_adj[0],
-                P.screen_y - hand_pos_adj[1],
-            )
-        else:
-            raise ValueError(
-                f'Invalid optitrack_origin: {P.optitrack_origin}'  # type: ignore[known-attribute]
-            )
-        return hand_pos_adj
-
     def get_hand_pos(self):
-        hand_marker = self.ot.position()
-        hand_pos = (
-            hand_marker[POS_X][0].item() * self.px_cm,
-            hand_marker[POS_Z][0].item() * self.px_cm,
-        )
-
-        return self.adjust_for_screen_origin(hand_pos)
+        markers = self.ot.position()
+        hand_pos = {
+            axis: markers[axis][0].item() * self.px_cm
+            for axis in (POS_X, POS_Y, POS_Z)
+        }
+        return hand_pos
 
     def abort_trial(self, err=''):
         msgs = {
@@ -436,7 +420,7 @@ class GripApertureRedux(klibs.Experiment):
             blit(
                 self.cursor,
                 registration=5,
-                location=hand_pos,
+                location=(hand_pos[POS_X], hand_pos[POS_Y]),
             )
 
         flip()
