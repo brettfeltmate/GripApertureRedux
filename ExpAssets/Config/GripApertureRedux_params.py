@@ -77,7 +77,7 @@ cm_offset = 10
 cm_padding = 3
 
 # TODO: Make this relative to rt
-reach_window_post_go_signal = 500
+reach_window_post_go_signal = 750
 go_signal_onset = (500, 2000)
 post_reach_window = 1000
 gbyk_distance_threshold = (
