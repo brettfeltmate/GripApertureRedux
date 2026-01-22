@@ -483,9 +483,8 @@ class GripApertureRedux(klibs.Experiment):
         """Get base directory path for current participant."""
 
         if P.development_mode:  # Don't pollute real data with dev tests
-            dev_dir = os.path.join(P.opti_data_dir, 'DEVTESTS')  # type: ignore[known-attribute]
-            self._ensure_dir_exists(dev_dir)
-            p_id = datetime.now().strftime('%m%d_%H%M%S')
+            timestamp = datetime.now().strftime('%m%d_%H%M%S')
+            p_id = "DEV_" + timestamp
         else:
             p_id = str(P.p_id)
         return os.path.join(
