@@ -75,6 +75,10 @@ cm_tall = 9
 cm_brim = 1
 cm_offset = 10
 cm_padding = 3
+goalzone_padding = {
+    'side': 2,  # finger width (ish)
+    'bottom': 9,  # ballpark 1/2 hand length
+}
 
 # TODO: Make this relative to rt
 reach_window_post_go_signal = 750
