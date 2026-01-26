@@ -65,35 +65,35 @@ class GripApertureRedux(klibs.Experiment):
         px_brim = P.cm_brim * self.px_cm  # type: ignore[known-attribute]
         px_offset = P.cm_offset * self.px_cm  # type: ignore[known-attribute]
 
-        # for working with streamed motion capture data
-        self.ot = OptiTracker(marker_count=10, sample_rate=120, window_size=5)
-
         # manages stream
         self.nnc = NatNetClient()
 
         # what to do with incoming data
+        # TODO: OptiTracker class should handle this directly
         self.nnc.markers_listener = self.marker_set_listener
+
+        # middleman between natnet stream and experiment
+        self.ot = OptiTracker(marker_count=10, sample_rate=120, window_size=5)
 
         # plato goggles controller
         self.goggles = serial.Serial(port=P.arduino_comport, baudrate=P.baudrate)  # type: ignore[known-attribute]
 
-        # 12cm centre-to-centre
-        # each centered 12cm from screen top
+        # 12cm centre-to-centre; aligned hoizontally along screen centre
         self.locs = {
             LEFT: (P.screen_c[0] - px_offset, P.screen_c[1]),
             RIGHT: (P.screen_c[0] + px_offset, P.screen_c[1]),
         }
 
-        self.sizes = {
+        self.shapes = {
             WIDE: (px_wide, px_tall),
             TALL: (px_tall, px_wide),
         }
 
-        # spawn object placeholders
+        # visual placeholders
         self.placeholders = {
             item: {
                 shape: kld.Rectangle(
-                    *self.sizes[shape],
+                    *self.shapes[shape],
                     stroke=[
                         px_brim,
                         WHITE if item == TARGET else GRUE,
@@ -106,6 +106,7 @@ class GripApertureRedux(klibs.Experiment):
             for item in (TARGET, DISTRACTOR)
         }
 
+        # for visualizing hand pos during debug
         if P.development_mode:
             self.cursor = kld.Annulus(
                 self.px_cm * 2,
@@ -114,18 +115,19 @@ class GripApertureRedux(klibs.Experiment):
                 fill=RED,
             )
 
+        # pre-calc object boundary points
         self.pts = {
             side: {
-                shape: self.calc_bounds(self.locs[side], self.sizes[shape])
+                shape: self.calc_boundary_pts(side, shape)
                 for shape in (WIDE, TALL)
             }
             for side in (LEFT, RIGHT)
         }
 
-        # spawn go signal
         self.go_signal = Tone(
             P.tone_duration, P.tone_shape, P.tone_freq, P.tone_volume  # type: ignore[known-attribute]
         )
+
         # inject practice blocks into fixed block sequence
         if P.run_practice_blocks:
             self.block_sequence = [
@@ -451,20 +453,29 @@ class GripApertureRedux(klibs.Experiment):
                     if marker is not None:
                         writer.writerow(marker)
 
-    def calc_bounds(self, loc, size):
-        # sometimes hand pos is pulled away by wrist markers
-        # so add padding to boundaries to compensate
-        padding = P.cm_padding * self.px_cm  # type: ignore[known-attribute]
-        return (
-            (
-                (loc[0] - size[0] / 2) + padding,
-                (loc[1] - size[1] / 2) + padding,
-            ),
-            (
-                (loc[0] + size[0] / 2) + padding,
-                (loc[1] + size[1] / 2) + padding,
-            ),
-        )
+    def calc_boundary_pts(self, loc, shape):
+        """
+        Calculate goalzone region, entry serves as proxy for object grasping.
+        Due to grasp shape, averaged hand pos often falls below objects.
+        Crudely compensates by extending obj boundaries a 1/2 handwidth (ballpark) downwards.
+        """
+        if loc == LEFT:
+            top_left = (0, 0)
+            bot_right = (
+                P.screen_c[0] - (shape[0] // 2) + P.goalzone_padding['side'],
+                P.screen_c[1] + (shape[1] // 2) + P.goalzone_padding['bottom'],
+            )
+        else:
+            top_left = (
+                P.screen_c[0] + (shape[0] // 2) - P.goalzone_padding['side'],
+                0,
+            )
+            bot_right = (
+                P.screen_x,
+                P.screen_c[1] + (shape[1] // 2) + P.goalzone_padding['bottom'],
+            )
+
+        return {loc: {shape: (top_left, bot_right)}}
 
     def _ensure_dir_exists(self, path):
         """Create directory if it doesn't exist. Raises exception on failure."""
