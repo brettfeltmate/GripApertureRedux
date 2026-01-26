@@ -250,27 +250,25 @@ class GripApertureRedux(klibs.Experiment):
         smart_sleep(P.opti_trial_lead_time)  # type: ignore[known-attribute]
 
     def trial(self):  # type: ignore[override]
-        hide_mouse_cursor()
-
         # Validate trial data file exists and contains data
         self._validate_trial_data_file(self.ot.data_dir)
 
-        self.present_stimuli()
+        hide_mouse_cursor()
 
         # control flags
+        self.target_visible = self.block_task == KBYG
         self.rt = None
         self.mt = None
-        self.target_onset_time = NA
-        self.target_visible = False
+        self.target_onset_time = None
         self.object_grasped = None
 
-        if self.block_task == KBYG:
-            # target is immediately available
-            self.present_stimuli(target=True)
-            self.target_visible = True
+        self.present_stimuli(target=self.target_visible)
 
         # reference point to determine if/when to present targets in GBYK trials
         start_pos = self.get_hand_pos()
+
+        if self.block_task == KBYG:
+            self.goggles.write(P.plato_open_cmd)  # type: ignore[known-attribute]
 
         # restrict movement until go signal received
         while self.evm.before(GO_SIGNAL):
@@ -282,7 +280,9 @@ class GripApertureRedux(klibs.Experiment):
         go_signal_onset_time = self.evm.trial_time_ms
 
         self.go_signal.play()
-        self.goggles.write(P.plato_open_cmd)  # type: ignore[known-attribute]
+
+        if self.block_task == GBYK:
+            self.goggles.write(P.plato_open_cmd)  # type: ignore[known-attribute]
 
         # monitor movement status following go-signal
         while self.evm.before(REACH_WINDOW_CLOSED):
@@ -367,10 +367,7 @@ class GripApertureRedux(klibs.Experiment):
         return self._translate_pos(hand_pos)
 
     def _translate_pos(self, pos):
-        return (
-            P.screen_x - pos[POS_X],
-            P.screen_y - pos[POS_Z]
-        )
+        return (P.screen_x - pos[POS_X], P.screen_y - pos[POS_Z])
 
     def abort_trial(self, err=''):
         msgs = {
@@ -424,10 +421,7 @@ class GripApertureRedux(klibs.Experiment):
         blit(target_holder, registration=5, location=self.locs[self.target_loc])  # type: ignore[known-attribute]
 
         if P.development_mode and not prep:
-            blit(
-                self.cursor,
-                registration=5,
-                location=self.get_hand_pos()            )
+            blit(self.cursor, registration=5, location=self.get_hand_pos())
 
         flip()
 
@@ -484,7 +478,7 @@ class GripApertureRedux(klibs.Experiment):
 
         if P.development_mode:  # Don't pollute real data with dev tests
             timestamp = datetime.now().strftime('%m%d_%H%M%S')
-            p_id = "DEV_" + timestamp
+            p_id = 'DEV_' + timestamp
         else:
             p_id = str(P.p_id)
         return os.path.join(
