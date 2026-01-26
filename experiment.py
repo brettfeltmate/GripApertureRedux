@@ -397,7 +397,7 @@ class GripApertureRedux(klibs.Experiment):
 
         if prep:
             message(
-                'Place props within size-matched rings.\n\nKeypress to start trial.',
+                'Place props within matching placeholders.\n\nKeypress to start trial.',
                 location=[P.screen_c[0], P.screen_c[1] // 3],  # type: ignore[known-attribute]
             )
 
