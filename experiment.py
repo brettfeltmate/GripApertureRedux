@@ -118,7 +118,7 @@ class GripApertureRedux(klibs.Experiment):
         # pre-calc object boundary points
         self.pts = {
             side: {
-                shape: self.calc_boundary_pts(side, shape)
+                self.calc_boundary_pts(side, self.shapes[shape])
                 for shape in (WIDE, TALL)
             }
             for side in (LEFT, RIGHT)
@@ -211,17 +211,21 @@ class GripApertureRedux(klibs.Experiment):
         # determine targ/dist locations
         self.distractor_loc = LEFT if self.target_loc == RIGHT else RIGHT  # type: ignore[known-attribute]
 
+        print(self.pts[self.target_loc])
+        print(self.pts[self.target_loc][0])
+        quit()
+
         # if hand position falls within one of these, presume object within it has been grasped
         self.target_boundary = RectangleBoundary(
             label=TARGET,
-            p1=self.pts[self.target_loc][self.target_shape][0],  # type: ignore[known-attribute]
-            p2=self.pts[self.target_loc][self.target_shape][1],  # type: ignore[known-attribute]
+            p1=self.pts[self.target_loc][0],  # type: ignore[known-attribute]
+            p2=self.pts[self.target_loc][self.target_shape][0][1],  # type: ignore[known-attribute]
         )
 
         self.distractor_boundary = RectangleBoundary(
             label=DISTRACTOR,
-            p1=self.pts[self.distractor_loc][self.distractor_shape][0],  # type: ignore[known-attribute]
-            p2=self.pts[self.distractor_loc][self.distractor_shape][1],  # type: ignore[known-attribute]
+            p1=self.pts[self.distractor_loc][self.distractor_shape][0][0],  # type: ignore[known-attribute]
+            p2=self.pts[self.distractor_loc][self.distractor_shape][0][1],  # type: ignore[known-attribute]
         )
 
         self.bounds = BoundarySet(
@@ -462,20 +466,21 @@ class GripApertureRedux(klibs.Experiment):
         if loc == LEFT:
             top_left = (0, 0)
             bot_right = (
-                P.screen_c[0] - (shape[0] // 2) + P.goalzone_padding['side'],
-                P.screen_c[1] + (shape[1] // 2) + P.goalzone_padding['bottom'],
+                P.screen_c[0] - (shape[0] // 2) + (P.goalzone_padding['side'] * self.px_cm),
+                P.screen_c[1] + (shape[1] // 2) + (P.goalzone_padding['bottom'] * self.px_cm),
             )
         else:
             top_left = (
-                P.screen_c[0] + (shape[0] // 2) - P.goalzone_padding['side'],
+                P.screen_c[0] + (shape[0] // 2) - (P.goalzone_padding['side'] * self.px_cm),
                 0,
             )
             bot_right = (
                 P.screen_x,
-                P.screen_c[1] + (shape[1] // 2) + P.goalzone_padding['bottom'],
+                P.screen_c[1] + (shape[1] // 2) + (P.goalzone_padding['bottom'] * self.px_cm),
             )
 
-        return {loc: {shape: (top_left, bot_right)}}
+        return (top_left, bot_right)
+
 
     def _ensure_dir_exists(self, path):
         """Create directory if it doesn't exist. Raises exception on failure."""
