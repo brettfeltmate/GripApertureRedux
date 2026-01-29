@@ -53,6 +53,8 @@ SPACE = 'space'
 PREMATURE_REACH = 'Premature reach'
 REACH_TIMEOUT = 'Reach timeout'
 NA = 'NA'
+P1 = 'p1'
+P2 = 'p2'
 
 
 class GripApertureRedux(klibs.Experiment):
@@ -60,10 +62,10 @@ class GripApertureRedux(klibs.Experiment):
         # sizings
         self.px_cm = int(P.ppi / 2.54)
 
-        px_wide = P.cm_wide * self.px_cm  # type: ignore[known-attribute]
-        px_tall = P.cm_tall * self.px_cm  # type: ignore[known-attribute]
-        px_brim = P.cm_brim * self.px_cm  # type: ignore[known-attribute]
-        px_offset = P.cm_offset * self.px_cm  # type: ignore[known-attribute]
+        self.px_wide = P.cm_wide * self.px_cm  # type: ignore[known-attribute]
+        self.px_tall = P.cm_tall * self.px_cm  # type: ignore[known-attribute]
+        self.px_brim = P.cm_brim * self.px_cm  # type: ignore[known-attribute]
+        self.px_offset = P.cm_offset * self.px_cm  # type: ignore[known-attribute]
 
         # manages stream
         self.nnc = NatNetClient()
@@ -80,13 +82,13 @@ class GripApertureRedux(klibs.Experiment):
 
         # 12cm centre-to-centre; aligned hoizontally along screen centre
         self.locs = {
-            LEFT: (P.screen_c[0] - px_offset, P.screen_c[1]),
-            RIGHT: (P.screen_c[0] + px_offset, P.screen_c[1]),
+            LEFT: (P.screen_c[0] - self.px_offset, P.screen_c[1]),
+            RIGHT: (P.screen_c[0] + self.px_offset, P.screen_c[1]),
         }
 
         self.shapes = {
-            WIDE: (px_wide, px_tall),
-            TALL: (px_tall, px_wide),
+            WIDE: (self.px_wide, self.px_tall),
+            TALL: (self.px_tall, self.px_wide),
         }
 
         # visual placeholders
@@ -95,7 +97,7 @@ class GripApertureRedux(klibs.Experiment):
                 shape: kld.Rectangle(
                     *self.shapes[shape],
                     stroke=[
-                        px_brim,
+                        self.px_brim,
                         WHITE if item == TARGET else GRUE,
                         STROKE_CENTER,
                     ],
@@ -118,7 +120,7 @@ class GripApertureRedux(klibs.Experiment):
         # pre-calc object boundary points
         self.pts = {
             side: {
-                self.calc_boundary_pts(side, self.shapes[shape])
+                shape: self.calc_boundary_pts(side, shape)
                 for shape in (WIDE, TALL)
             }
             for side in (LEFT, RIGHT)
@@ -143,7 +145,6 @@ class GripApertureRedux(klibs.Experiment):
             )
         else:
             self.block_sequence = P.task_order  # type: ignore[known-attribute]
-        # TODO: use a distance criterion instead
 
         # where motion capture data is stored
         self._ensure_dir_exists(P.opti_data_dir)  # type: ignore[known-attribute]
@@ -211,21 +212,17 @@ class GripApertureRedux(klibs.Experiment):
         # determine targ/dist locations
         self.distractor_loc = LEFT if self.target_loc == RIGHT else RIGHT  # type: ignore[known-attribute]
 
-        print(self.pts[self.target_loc])
-        print(self.pts[self.target_loc][0])
-        quit()
-
         # if hand position falls within one of these, presume object within it has been grasped
         self.target_boundary = RectangleBoundary(
             label=TARGET,
-            p1=self.pts[self.target_loc][0],  # type: ignore[known-attribute]
-            p2=self.pts[self.target_loc][self.target_shape][0][1],  # type: ignore[known-attribute]
+            p1=self.pts[self.target_loc][self.target_shape][P1],  # type: ignore[known-attribute]
+            p2=self.pts[self.target_loc][self.target_shape][P2],  # type: ignore[known-attribute]
         )
 
         self.distractor_boundary = RectangleBoundary(
             label=DISTRACTOR,
-            p1=self.pts[self.distractor_loc][self.distractor_shape][0][0],  # type: ignore[known-attribute]
-            p2=self.pts[self.distractor_loc][self.distractor_shape][0][1],  # type: ignore[known-attribute]
+            p1=self.pts[self.distractor_loc][self.distractor_shape][P1],  # type: ignore[known-attribute]
+            p2=self.pts[self.distractor_loc][self.distractor_shape][P2],  # type: ignore[known-attribute]
         )
 
         self.bounds = BoundarySet(
@@ -462,25 +459,42 @@ class GripApertureRedux(klibs.Experiment):
         Calculate goalzone region, entry serves as proxy for object grasping.
         Due to grasp shape, averaged hand pos often falls below objects.
         Crudely compensates by extending obj boundaries a 1/2 handwidth (ballpark) downwards.
+            (by crudely I mean both the solution and the implementation)
         """
+
+        # I'm sorry that you have to read this
         if loc == LEFT:
             top_left = (0, 0)
             bot_right = (
-                P.screen_c[0] - (shape[0] // 2) + (P.goalzone_padding['side'] * self.px_cm),
-                P.screen_c[1] + (shape[1] // 2) + (P.goalzone_padding['bottom'] * self.px_cm),
+                P.screen_c[0]
+                - self.px_offset
+                + (self.shapes[shape][0] // 2)
+                + (
+                    # goalzone was a terrible choice of name
+                    # the boundary extends slightly beyond inner-bottom edge of object
+                    P.goalzone_padding['side']  # type: ignore[known-attribute]
+                    * self.px_cm
+                ),
+                P.screen_c[1]
+                + (self.shapes[shape][1] // 2)
+                + (P.goalzone_padding['bottom'] * self.px_cm),  # type: ignore[known-attribute]
             )
         else:
             top_left = (
-                P.screen_c[0] + (shape[0] // 2) - (P.goalzone_padding['side'] * self.px_cm),
+                P.screen_c[0]
+                + self.px_offset
+                - (self.shapes[shape][0] // 2)
+                - (P.goalzone_padding['side'] * self.px_cm),  # type: ignore[known-attribute]
                 0,
             )
             bot_right = (
                 P.screen_x,
-                P.screen_c[1] + (shape[1] // 2) + (P.goalzone_padding['bottom'] * self.px_cm),
+                P.screen_c[1]
+                + (self.shapes[shape][1] // 2)
+                + (P.goalzone_padding['bottom'] * self.px_cm),  # type: ignore[known-attribute]
             )
 
-        return (top_left, bot_right)
-
+        return {P1: top_left, P2: bot_right}
 
     def _ensure_dir_exists(self, path):
         """Create directory if it doesn't exist. Raises exception on failure."""
