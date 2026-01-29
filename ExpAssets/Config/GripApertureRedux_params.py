@@ -76,12 +76,12 @@ cm_brim = 1
 cm_offset = 10
 cm_padding = 3
 goalzone_padding = {
-    'side': 2,  # finger width (ish)
-    'bottom': 9,  # ballpark 1/2 hand length
+    'side': 3,  # finger width (ish)
+    'bottom': 8,  # ballpark 1/2 hand length
 }
 
 # TODO: Make this relative to rt
-reach_window_post_go_signal = 750
+reach_window_post_go_signal = 1000
 go_signal_onset = (500, 2000)
 post_reach_window = 1000
 gbyk_distance_threshold = (

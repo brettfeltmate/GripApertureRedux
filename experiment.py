@@ -33,6 +33,9 @@ from pyfirmata import serial  # type: ignore[import]
 WHITE = (255, 255, 255, 255)
 GRUE = (90, 90, 96, 255)
 RED = (255, 0, 0, 255)
+BLUE = (0, 0, 255, 255)
+GREEN = (0,255, 0, 255)
+PURP = (255, 0, 255, 255)
 
 # anti-typo protections
 LEFT = 'left'
@@ -115,6 +118,30 @@ class GripApertureRedux(klibs.Experiment):
                 self.px_cm // 5,
                 stroke=[self.px_cm // 10, RED, STROKE_INNER],
                 fill=RED,
+            )
+            self.tl_left = kld.Annulus(
+                self.px_cm,
+                self.px_cm // 5,
+                stroke=[self.px_cm // 10, GREEN, STROKE_INNER],
+                fill=GREEN,
+            )
+            self.br_left = kld.Annulus(
+                self.px_cm,
+                self.px_cm // 5,
+                stroke=[self.px_cm // 10, BLUE, STROKE_INNER],
+                fill=BLUE,
+            )
+            self.tl_right = kld.Annulus(
+                self.px_cm,
+                self.px_cm // 5,
+                stroke=[self.px_cm // 10, RED, STROKE_INNER],
+                fill=RED,
+            )
+            self.br_right = kld.Annulus(
+                self.px_cm,
+                self.px_cm // 5,
+                stroke=[self.px_cm // 10, PURP, STROKE_INNER],
+                fill=PURP,
             )
 
         # pre-calc object boundary points
@@ -423,8 +450,14 @@ class GripApertureRedux(klibs.Experiment):
 
         blit(target_holder, registration=5, location=self.locs[self.target_loc])  # type: ignore[known-attribute]
 
-        if P.development_mode and not prep:
-            blit(self.cursor, registration=5, location=self.get_hand_pos())
+        if P.development_mode:
+            if not prep:
+                blit(self.cursor, registration=5, location=self.get_hand_pos())
+            blit(self.tl_right, registration=5, location=self.pts[RIGHT][self.target_shape if self.target_loc == RIGHT else self.distractor_shape][P1])
+            blit(self.br_right, registration=5, location=self.pts[RIGHT][self.target_shape if self.target_loc == RIGHT else self.distractor_shape][P2])
+            blit(self.tl_left, registration=5, location=self.pts[LEFT][self.target_shape if self.target_loc == LEFT else self.distractor_shape][P1])
+            blit(self.br_left, registration=5, location=self.pts[LEFT][self.target_shape if self.target_loc == LEFT else self.distractor_shape][P2])
+
 
         flip()
 
