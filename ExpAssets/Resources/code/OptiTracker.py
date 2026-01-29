@@ -4,7 +4,6 @@ import sqlite3
 from scipy.signal import butter, sosfiltfilt
 
 
-
 # from klibs.KLDatabase import KLDatabase as kld
 
 # TODO:
@@ -38,8 +37,8 @@ class OptiTracker(object):
         marker_count: int,
         sample_rate: int = 120,
         window_size: int = 5,
-        data_dir: str = "",
-        db_name: str = "optitracker.db",
+        data_dir: str = '',
+        db_name: str = 'optitracker.db',
     ):
         """
         Initialize the OptiTracker object.
@@ -128,7 +127,7 @@ class OptiTracker(object):
             num_frames = self.__window_size
 
         if num_frames < 2:
-            raise ValueError("Window size must cover at least two frames.")
+            raise ValueError('Window size must cover at least two frames.')
 
         frames = self.__query_frames(num_frames)
         return self.__velocity(frames)
@@ -158,7 +157,7 @@ class OptiTracker(object):
             float: Calculated velocity in cm/s
         """
         if self.__window_size < 2:
-            raise ValueError("Window size must cover at least two frames.")
+            raise ValueError('Window size must cover at least two frames.')
 
         if len(frames) == 0:
             frames = self.__query_frames()
@@ -191,9 +190,9 @@ class OptiTracker(object):
 
         return float(
             np.sqrt(
-                (positions["pos_x"][-1] - positions["pos_x"][0]) ** 2
-                + (positions["pos_y"][-1] - positions["pos_y"][0]) ** 2
-                + (positions["pos_z"][-1] - positions["pos_z"][0]) ** 2
+                (positions['pos_x'][-1] - positions['pos_x'][0]) ** 2
+                + (positions['pos_y'][-1] - positions['pos_y'][0]) ** 2
+                + (positions['pos_z'][-1] - positions['pos_z'][0]) ** 2
             )
         )
 
@@ -201,7 +200,11 @@ class OptiTracker(object):
     # TODO: but first make sure this isn't a bad idea.
 
     def __smooth(
-        self, order=2, cutoff=10, filtype="low", frames: np.ndarray = np.array([])
+        self,
+        order=2,
+        cutoff=10,
+        filtype='low',
+        frames: np.ndarray = np.array([]),
     ) -> np.ndarray:
         """
         Apply a dual-pass Butterworth filter to positional data.
@@ -222,24 +225,28 @@ class OptiTracker(object):
         smooth = np.zeros(
             len(frames),
             dtype=[
-                ("frame_number", "i8"),
-                ("pos_x", "i8"),
-                ("pos_y", "i8"),
-                ("pos_z", "i8"),
+                ('frame_number', 'i8'),
+                ('pos_x', 'i8'),
+                ('pos_y', 'i8'),
+                ('pos_z', 'i8'),
             ],
         )
 
         butt = butter(
-            N=order, Wn=cutoff, btype=filtype, output="sos", fs=self.__sample_rate
+            N=order,
+            Wn=cutoff,
+            btype=filtype,
+            output='sos',
+            fs=self.__sample_rate,
         )
 
         # print("[__smooth()]")
         # print("frames:")
         # pprint(frames)
 
-        smooth["pos_x"] = sosfiltfilt(sos=butt, x=frames["pos_x"])
-        smooth["pos_y"] = sosfiltfilt(sos=butt, x=frames["pos_y"])
-        smooth["pos_z"] = sosfiltfilt(sos=butt, x=frames["pos_z"])
+        smooth['pos_x'] = sosfiltfilt(sos=butt, x=frames['pos_x'])
+        smooth['pos_y'] = sosfiltfilt(sos=butt, x=frames['pos_y'])
+        smooth['pos_z'] = sosfiltfilt(sos=butt, x=frames['pos_z'])
 
         return smooth
 
@@ -269,19 +276,21 @@ class OptiTracker(object):
         means = np.zeros(
             len(frames) // self.__marker_count,
             dtype=[
-                ("frame_number", "i8"),
-                ("pos_x", "i8"),
-                ("pos_y", "i8"),
-                ("pos_z", "i8"),
+                ('frame_number', 'i8'),
+                ('pos_x', 'i8'),
+                ('pos_y', 'i8'),
+                ('pos_z', 'i8'),
             ],
         )
 
         # Group by marker (every nth row where n is marker_count)
-        start = min(frames["frame_number"])
-        stop = max(frames["frame_number"]) + 1
+        start = min(frames['frame_number'])
+        stop = max(frames['frame_number']) + 1
 
         for frame_number in range(start, stop):
-            this_frame = frames[frames["frame_number"] == frame_number,]
+            this_frame = frames[
+                frames['frame_number'] == frame_number,
+            ]
 
             # print("OptiTracker column_means, this frame:")
             # pprint(this_frame)
@@ -293,9 +302,9 @@ class OptiTracker(object):
             #         tmp -= 1
 
             idx = frame_number - start
-            means[idx]["pos_x"] = np.mean(this_frame["pos_x"])
-            means[idx]["pos_y"] = np.mean(this_frame["pos_y"])
-            means[idx]["pos_z"] = np.mean(this_frame["pos_z"])
+            means[idx]['pos_x'] = np.mean(this_frame['pos_x'])
+            means[idx]['pos_y'] = np.mean(this_frame['pos_y'])
+            means[idx]['pos_z'] = np.mean(this_frame['pos_z'])
 
             idx += 1
 
@@ -324,23 +333,26 @@ class OptiTracker(object):
             FileNotFoundError: If data directory does not exist
         """
 
-        if self.__data_dir == "":
-            raise ValueError("No data directory was set.")
+        if self.__data_dir == '':
+            raise ValueError('No data directory was set.')
 
         if not os.path.exists(self.__data_dir):
-            raise FileNotFoundError(f"Data directory not found at:\n{self.__data_dir}")
+            raise FileNotFoundError(
+                f'Data directory not found at:\n{self.__data_dir}'
+            )
 
         if num_frames < 0:
-            raise ValueError("Number of frames cannot be negative.")
+            raise ValueError('Number of frames cannot be negative.')
 
-        with open(self.__data_dir, "r") as file:
-            header = file.readline().strip().split(",")
+        with open(self.__data_dir, 'r') as file:
+            header = file.readline().strip().split(',')
 
         if any(
-            col not in header for col in ["frame_number", "pos_x", "pos_y", "pos_z"]
+            col not in header
+            for col in ['frame_number', 'pos_x', 'pos_y', 'pos_z']
         ):
             raise ValueError(
-                "Data file must contain columns named frame_number, pos_x, pos_y, pos_z."
+                'Data file must contain columns named frame_number, pos_x, pos_y, pos_z.'
             )
 
         dtype_map = [
@@ -348,9 +360,11 @@ class OptiTracker(object):
             (
                 name,
                 (
-                    "float"
-                    if name in ["pos_x", "pos_y", "pos_z"]
-                    else "int" if name == "frame_number" else "U32"
+                    'float'
+                    if name in ['pos_x', 'pos_y', 'pos_z']
+                    else 'int'
+                    if name == 'frame_number'
+                    else 'U32'
                 ),
             )
             for name in header
@@ -358,26 +372,26 @@ class OptiTracker(object):
 
         # read in data now that columns have been validated and typed
         data = np.genfromtxt(
-            self.__data_dir, delimiter=",", dtype=dtype_map, skip_header=1
+            self.__data_dir, delimiter=',', dtype=dtype_map, skip_header=1
         )
 
-        for col in ["pos_x", "pos_y", "pos_z"]:
+        for col in ['pos_x', 'pos_y', 'pos_z']:
             # rescale from mm to cm
-            data[col] = np.rint(data[col] * 100).astype(np.int32)
+            data[col] = np.rint(data[col] * 1000).astype(np.int32)
 
         if num_frames == 0:
             num_frames = self.__window_size
 
         # Calculate which frames to include
-        last_frame = data["frame_number"][-1]
+        last_frame = data['frame_number'][-1]
         lookback = last_frame - num_frames
 
         # Filter for relevant frames
-        data = data[data["frame_number"] > lookback]
+        data = data[data['frame_number'] > lookback]
 
         return data
 
-    def __connect(self, db_name: str = "optitracker.db") -> sqlite3.Connection:
+    def __connect(self, db_name: str = 'optitracker.db') -> sqlite3.Connection:
         """
         Connect to the SQLite database.
 
