@@ -34,7 +34,7 @@ WHITE = (255, 255, 255, 255)
 GRUE = (90, 90, 96, 255)
 RED = (255, 0, 0, 255)
 BLUE = (0, 0, 255, 255)
-GREEN = (0,255, 0, 255)
+GREEN = (0, 255, 0, 255)
 PURP = (255, 0, 255, 255)
 
 # anti-typo protections
@@ -157,21 +157,13 @@ class GripApertureRedux(klibs.Experiment):
             P.tone_duration, P.tone_shape, P.tone_freq, P.tone_volume  # type: ignore[known-attribute]
         )
 
-        # inject practice blocks into fixed block sequence
+        self.block_sequence = P.task_order  # type: ignore[known-attribute]
+
         if P.run_practice_blocks:
-            self.block_sequence = [
-                cond
-                for cond in P.task_order  # type: ignore[known-attribute]
-                for _ in range(P.blocks_per_experiment // 2)
-            ]
             self.insert_practice_block(
-                block_nums=[
-                    i for i in range(P.blocks_per_experiment) if i % 2 != 0
-                ],
-                trial_counts=P.trials_per_practice_block,  # type: ignore[known-attribute]
+                block_nums=[0], trial_counts=P.trials_per_practice_block  # type: ignore[known-attribute]
             )
-        else:
-            self.block_sequence = P.task_order  # type: ignore[known-attribute]
+            self.block_sequence = P.task_order[0] + self.block_sequence  # type: ignore[known-attribute]
 
         # where motion capture data is stored
         self._ensure_dir_exists(P.opti_data_dir)  # type: ignore[known-attribute]
@@ -453,11 +445,42 @@ class GripApertureRedux(klibs.Experiment):
         if P.development_mode:
             if not prep:
                 blit(self.cursor, registration=5, location=self.get_hand_pos())
-            blit(self.tl_right, registration=5, location=self.pts[RIGHT][self.target_shape if self.target_loc == RIGHT else self.distractor_shape][P1])
-            blit(self.br_right, registration=5, location=self.pts[RIGHT][self.target_shape if self.target_loc == RIGHT else self.distractor_shape][P2])
-            blit(self.tl_left, registration=5, location=self.pts[LEFT][self.target_shape if self.target_loc == LEFT else self.distractor_shape][P1])
-            blit(self.br_left, registration=5, location=self.pts[LEFT][self.target_shape if self.target_loc == LEFT else self.distractor_shape][P2])
-
+            blit(
+                self.tl_right,
+                registration=5,
+                location=self.pts[RIGHT][
+                    self.target_shape
+                    if self.target_loc == RIGHT
+                    else self.distractor_shape
+                ][P1],
+            )
+            blit(
+                self.br_right,
+                registration=5,
+                location=self.pts[RIGHT][
+                    self.target_shape
+                    if self.target_loc == RIGHT
+                    else self.distractor_shape
+                ][P2],
+            )
+            blit(
+                self.tl_left,
+                registration=5,
+                location=self.pts[LEFT][
+                    self.target_shape
+                    if self.target_loc == LEFT
+                    else self.distractor_shape
+                ][P1],
+            )
+            blit(
+                self.br_left,
+                registration=5,
+                location=self.pts[LEFT][
+                    self.target_shape
+                    if self.target_loc == LEFT
+                    else self.distractor_shape
+                ][P2],
+            )
 
         flip()
 

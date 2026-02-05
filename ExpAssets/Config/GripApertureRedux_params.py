@@ -73,7 +73,7 @@ trials_per_practice_block = 8
 cm_wide = 5
 cm_tall = 9
 cm_brim = 1
-cm_offset = 10
+cm_offset = 20
 cm_padding = 3
 goalzone_padding = {
     'side': 3,  # finger width (ish)
