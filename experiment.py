@@ -161,9 +161,9 @@ class GripApertureRedux(klibs.Experiment):
 
         if P.run_practice_blocks:
             self.insert_practice_block(
-                block_nums=[0], trial_counts=P.trials_per_practice_block  # type: ignore[known-attribute]
+                block_nums=[1], trial_counts=P.trials_per_practice_block  # type: ignore[known-attribute]
             )
-            self.block_sequence = P.task_order[0] + self.block_sequence  # type: ignore[known-attribute]
+            self.block_sequence = [P.task_order[0]] + self.block_sequence  # type: ignore[known-attribute]
 
         # where motion capture data is stored
         self._ensure_dir_exists(P.opti_data_dir)  # type: ignore[known-attribute]

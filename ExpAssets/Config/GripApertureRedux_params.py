@@ -76,7 +76,7 @@ cm_brim = 1
 cm_offset = 20
 cm_padding = 3
 goalzone_padding = {
-    'side': 3,  # finger width (ish)
+    'side': 8,  # finger width (ish)
     'bottom': 8,  # ballpark 1/2 hand length
 }
 

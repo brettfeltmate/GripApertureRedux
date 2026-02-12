@@ -377,7 +377,7 @@ class OptiTracker(object):
 
         for col in ['pos_x', 'pos_y', 'pos_z']:
             # rescale from mm to cm
-            data[col] = np.rint(data[col] * 1000).astype(np.int32)
+            data[col] = np.rint(data[col] * 100).astype(np.int32)
 
         if num_frames == 0:
             num_frames = self.__window_size
