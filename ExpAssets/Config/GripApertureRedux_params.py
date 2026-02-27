@@ -73,8 +73,7 @@ trials_per_practice_block = 8
 cm_wide = 5
 cm_tall = 9
 cm_brim = 1
-cm_offset = 20
-cm_padding = 3
+cm_offset = 30
 goalzone_padding = {
     'side': 8,  # finger width (ish)
     'bottom': 8,  # ballpark 1/2 hand length
@@ -97,7 +96,7 @@ tone_freq = 784  # ridin' on yo G5 airplane
 tone_volume = 1.0
 
 opti_data_dir = 'OptiData'
-opti_trial_lead_time = 100   # ms
+opti_trial_lead_time = 60   # ms
 
 plato_open_cmd = b'55'
 plato_close_cmd = b'56'
