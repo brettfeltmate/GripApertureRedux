@@ -69,7 +69,7 @@ append_hostname = False
 # PROJECT-SPECIFIC VARS
 #########################################
 task_order = ['GBYK', 'KBYG']
-trials_per_practice_block = 8
+trials_per_practice_block = 20
 cm_wide = 5
 cm_tall = 9
 cm_brim = 1
