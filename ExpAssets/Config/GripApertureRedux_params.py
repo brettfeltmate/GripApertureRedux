@@ -102,4 +102,5 @@ plato_open_cmd = b'55'
 plato_close_cmd = b'56'
 arduino_comport = 'COM6'
 baudrate = 9600
+
 hand_marker_setname = 'right'
